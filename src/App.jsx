@@ -1,315 +1,299 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
-// Import Firebase modules
 import { initializeApp } from 'firebase/app';
-import {
-    getAuth,
-    onAuthStateChanged,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signInWithPopup,
-    GoogleAuthProvider,
-    signOut,
-    sendPasswordResetEmail,
-    setPersistence,
-    browserSessionPersistence,
-    browserLocalPersistence
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
-import {
-    getFirestore,
-    doc,
-    setDoc,
-    getDoc,
-    collection,
-    getDocs,
-    updateDoc
+import { 
+  getFirestore, 
+  doc, 
+  getDoc, 
+  setDoc,
+  collection,
+  getDocs,
+  updateDoc
 } from 'firebase/firestore';
 
-// --- Firebase Initialization ---
-// The VITE_FIREBASE_CONFIG variable will be replaced by Vite from your .env.local file
-const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
-let app, auth, db;
-let firebaseError = null;
+// --- Firebase Configuration ---
+// In a real Vite project, this would be:
+// const firebaseConfigString = import.meta.env.VITE_FIREBASE_CONFIG;
+// For this environment, we'll define it directly.
+const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6318","measurementId":"G-G6M6DPNERN"}`;
+
+let firebaseApp;
+let auth;
+let db;
 
 try {
-    if (!firebaseConfigString) {
-        throw new Error("Firebase config is missing. Make sure it's in your .env.local file.");
-    }
-    const firebaseConfig = JSON.parse(firebaseConfigString);
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+  const firebaseConfig = JSON.parse(firebaseConfigString);
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
 } catch (error) {
-    console.error("Firebase initialization error:", error);
-    firebaseError = error.message;
+  console.error("Error initializing Firebase:", error);
+  // Handle the error appropriately in a real app
 }
 
+// --- Helper Functions ---
+const getUserProfile = async (uid) => {
+  if (!db) return null;
+  const userDocRef = doc(db, 'users', uid);
+  const userDocSnap = await getDoc(userDocRef);
+  if (userDocSnap.exists()) {
+    return userDocSnap.data();
+  }
+  return null;
+};
 
-// --- Reusable Components ---
+// --- React Components ---
 
-const Logo = () => (
-    <div className="flex items-center space-x-4">
-        <img src="https://i.imgur.com/lfwJKXr.png" alt="IRN Solar House Logo" className="h-12 w-auto" />
-        <h1 className="text-2xl font-bold text-sky-600">IRN Solar House</h1>
+const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
+  <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+    <div className="flex flex-col items-center">
+      <img 
+        src="https://imgur.com/lfwJKXr" 
+        alt="IRN Solar House Logo" 
+        // --- LOGO SIZE ADJUSTMENT ---
+        // I've changed h-12 to h-24. You can use values like h-16, h-20, h-32 etc.
+        // The 'w-auto' class makes the width adjust automatically.
+        className="h-24 w-auto mb-4" 
+      />
+      <h2 className="text-3xl font-bold text-center text-gray-800">{title}</h2>
     </div>
-);
-
-const Header = ({ user, handleSignOut }) => (
-    <header className="bg-white shadow-md sticky top-0 z-50">
-        <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-            <Logo />
-            <div>
-                {user ? (
-                    <button onClick={handleSignOut} className="bg-amber-500 text-white font-medium py-2 px-4 rounded-lg shadow-md hover:bg-amber-600 hover:shadow-lg transition-all duration-200">
-                        Sign Out
-                    </button>
-                ) : (
-                     <p className="text-gray-500">Please sign in</p>
-                )}
-            </div>
-        </nav>
-    </header>
-);
-
-// --- Authentication Components ---
-
-const AuthPage = () => {
-    const [form, setForm] = useState('signin'); // 'signin', 'signup', 'reset'
-
-    return (
-        <div className="max-w-md mx-auto mt-8">
-             {form === 'signin' && <SignInForm setForm={setForm} />}
-             {form === 'signup' && <SignUpForm setForm={setForm} />}
-             {form === 'reset' && <ResetPasswordForm setForm={setForm} />}
+    
+    <form className="space-y-6" onSubmit={onSubmit}>
+      {fields.map(field => (
+        <div key={field.id}>
+          <label htmlFor={field.id} className="text-sm font-medium text-gray-700">
+            {field.label}
+          </label>
+          <input
+            id={field.id}
+            name={field.id}
+            type={field.type}
+            required={field.required}
+            className="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder={field.placeholder}
+          />
         </div>
-    );
+      ))}
+      
+      {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+      
+      <div>
+        <button
+          type="submit"
+          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          {buttonText}
+        </button>
+      </div>
+    </form>
+    {children}
+  </div>
+);
+
+const SignIn = ({ setView, onLoginSuccess }) => {
+  const [error, setError] = useState('');
+
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+    const email = e.target.email.value;
+    const password = e.target.password.value;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userProfile = await getUserProfile(userCredential.user.uid);
+      onLoginSuccess(userProfile);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        let userProfile = await getUserProfile(user.uid);
+
+        if (!userProfile) {
+            const newUserProfile = {
+                email: user.email,
+                displayName: user.displayName,
+                role: 'pending', 
+                createdAt: new Date().toISOString(),
+            };
+            await setDoc(doc(db, 'users', user.uid), newUserProfile);
+            userProfile = newUserProfile;
+        }
+        onLoginSuccess(userProfile);
+    } catch (err) {
+        setError(err.message);
+    }
+  };
+
+  return (
+    <AuthForm
+      title="Sign In to Your Account"
+      fields={[
+        { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
+        { id: 'password', label: 'Password', type: 'password', required: true, placeholder: '••••••••' },
+      ]}
+      buttonText="Sign In"
+      onSubmit={handleSignIn}
+      error={error}
+    >
+        <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+        </div>
+
+        <div>
+            <button
+            onClick={handleGoogleSignIn}
+            className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M10 0C4.477 0 0 4.477 0 10c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.014-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.031-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.378.203 2.398.1 2.651.64.7 1.03 1.595 1.03 2.688 0 3.848-2.338 4.695-4.566 4.942.359.308.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.001 10.001 0 0020 10c0-5.523-4.477-10-10-10z" clipRule="evenodd" />
+            </svg>
+            Sign in with Google
+            </button>
+        </div>
+      <div className="text-sm text-center mt-4">
+        <a href="#" onClick={() => setView('forgot-password')} className="font-medium text-blue-600 hover:text-blue-500">
+          Forgot your password?
+        </a>
+      </div>
+      <div className="text-sm text-center">
+        <p className="text-gray-600">
+          Don't have an account?{' '}
+          <a href="#" onClick={() => setView('signup')} className="font-medium text-blue-600 hover:text-blue-500">
+            Sign up
+          </a>
+        </p>
+      </div>
+    </AuthForm>
+  );
 };
 
-const SignInForm = ({ setForm }) => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(false);
+const SignUp = ({ setView, onLoginSuccess }) => {
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleSignIn = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        try {
-            await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
-            await signInWithEmailAndPassword(auth, email, password);
-        } catch (err) {
-            setError(err.message);
-            console.error("Sign In Error", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleGoogleSignIn = async () => {
-        setError('');
-        setLoading(true);
-        const provider = new GoogleAuthProvider();
-        try {
-            const result = await signInWithPopup(auth, provider);
-            const userDocRef = doc(db, `artifacts/${app.options.appId}/public/data/users`, result.user.uid);
-            const userDoc = await getDoc(userDocRef);
-            if (!userDoc.exists()) {
-                await setDoc(userDocRef, {
-                    uid: result.user.uid,
-                    email: result.user.email,
-                    role: 'pending',
-                    createdAt: new Date(),
-                    appId: app.options.appId
-                });
-            }
-        } catch (err) {
-            setError(err.message);
-            console.error("Google Sign In Error", err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="bg-white p-8 rounded-xl shadow-lg animate-fade-in">
-            <div className="flex justify-center mb-6">
-                 <img src="https://i.imgur.com/lfwJKXr.png" alt="Logo" className="h-16" />
-            </div>
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Sign In</h2>
-            {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-sm">{error}</p>}
-            <form onSubmit={handleSignIn}>
-                 <div className="mb-4">
-                    <label className="block text-gray-600 mb-2" htmlFor="signin-email">Email Address</label>
-                    <input type="email" id="signin-email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" required />
-                </div>
-                 <div className="mb-4">
-                    <label className="block text-gray-600 mb-2" htmlFor="signin-password">Password</label>
-                    <input type="password" id="signin-password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" required />
-                </div>
-                <div className="flex items-center justify-between mb-6">
-                    <label className="flex items-center text-gray-600">
-                        <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="mr-2 h-4 w-4 rounded text-amber-500 focus:ring-amber-500"/>
-                        Remember me
-                    </label>
-                    <a href="#" onClick={() => setForm('reset')} className="text-sm text-sky-600 hover:underline">Forgot Password?</a>
-                </div>
-                <button type="submit" disabled={loading} className="w-full bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition duration-200 disabled:bg-gray-400">{loading ? 'Signing In...' : 'Sign In'}</button>
-            </form>
-            <div className="my-6 flex items-center">
-                <div className="flex-grow border-t border-gray-300"></div>
-                <span className="mx-4 text-gray-500">or</span>
-                <div className="flex-grow border-t border-gray-300"></div>
-            </div>
-             <button onClick={handleGoogleSignIn} disabled={loading} className="w-full flex items-center justify-center py-2 px-4 border rounded-lg hover:bg-gray-100 transition duration-200 disabled:bg-gray-200">
-                 <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
-                 Sign in with Google
-             </button>
-            <p className="text-center mt-6 text-gray-600">Don't have an account? <a href="#" onClick={() => setForm('signup')} className="text-sky-600 hover:underline">Sign up</a></p>
-        </div>
-    );
-};
-
-const SignUpForm = ({ setForm }) => {
-     // Similar structure to SignInForm for handling sign-up logic
-     const [email, setEmail] = useState('');
-     const [password, setPassword] = useState('');
-     const [error, setError] = useState('');
-     const [loading, setLoading] = useState(false);
-     const [success, setSuccess] = useState('');
-
+  
     const handleSignUp = async (e) => {
-        e.preventDefault();
-        setError('');
-        setSuccess('');
-        setLoading(true);
-        try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await setDoc(doc(db, `artifacts/${app.options.appId}/public/data/users`, userCredential.user.uid), {
-                uid: userCredential.user.uid,
-                email: userCredential.user.email,
-                role: 'pending',
-                createdAt: new Date(),
-                appId: app.options.appId
-            });
-            setSuccess('Account created successfully! Please sign in.');
-            setTimeout(() => setForm('signin'), 2000);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+      e.preventDefault();
+      const email = e.target.email.value;
+      const password = e.target.password.value;
+      const confirmPassword = e.target['confirm-password'].value;
+  
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+  
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        
+        // Create a user profile document in Firestore
+        const userProfile = {
+          email: user.email,
+          displayName: user.email, // Default display name
+          role: 'pending', // Default role for new sign-ups
+          createdAt: new Date().toISOString(),
+        };
+        await setDoc(doc(db, "users", user.uid), userProfile);
 
+        onLoginSuccess(userProfile);
+
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+  
     return (
-        <div className="bg-white p-8 rounded-xl shadow-lg animate-fade-in">
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Create Account</h2>
-             {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-sm">{error}</p>}
-             {success && <p className="bg-green-100 text-green-700 p-3 rounded-md mb-4 text-sm">{success}</p>}
-            <form onSubmit={handleSignUp}>
-                <div className="mb-4">
-                    <label className="block text-gray-600 mb-2" htmlFor="signup-email">Email Address</label>
-                    <input type="email" id="signup-email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" required />
-                </div>
-                <div className="mb-6">
-                    <label className="block text-gray-600 mb-2" htmlFor="signup-password">Password</label>
-                    <input type="password" id="signup-password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" required />
-                </div>
-                <button type="submit" disabled={loading} className="w-full bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition duration-200 disabled:bg-gray-400">{loading ? 'Creating Account...' : 'Sign Up'}</button>
-            </form>
-            <p className="text-center mt-6 text-gray-600">Already have an account? <a href="#" onClick={() => setForm('signin')} className="text-sky-600 hover:underline">Sign in</a></p>
+      <AuthForm
+        title="Create a New Account"
+        fields={[
+          { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
+          { id: 'password', label: 'Password', type: 'password', required: true, placeholder: 'Minimum 8 characters' },
+          { id: 'confirm-password', label: 'Confirm Password', type: 'password', required: true, placeholder: 'Re-enter your password' },
+        ]}
+        buttonText="Create Account"
+        onSubmit={handleSignUp}
+        error={error}
+      >
+        <div className="text-sm text-center mt-4">
+          <p className="text-gray-600">
+            Already have an account?{' '}
+            <a href="#" onClick={() => setView('signin')} className="font-medium text-blue-600 hover:text-blue-500">
+              Sign In
+            </a>
+          </p>
         </div>
+      </AuthForm>
     );
 };
 
-const ResetPasswordForm = ({ setForm }) => {
-    // Logic for password reset
-    const [email, setEmail] = useState('');
+const ForgotPassword = ({ setView }) => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-
+  
     const handlePasswordReset = async (e) => {
-        e.preventDefault();
-        setError('');
-        setMessage('');
-        setLoading(true);
-        try {
-            await sendPasswordResetEmail(auth, email);
-            setMessage('Password reset email sent! Check your inbox.');
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+      e.preventDefault();
+      const email = e.target.email.value;
+      setError('');
+      setMessage('');
+      try {
+        await sendPasswordResetEmail(auth, email);
+        setMessage("Password reset email sent! Please check your inbox.");
+      } catch (err) {
+        setError(err.message);
+      }
     };
-
+  
     return (
-        <div className="bg-white p-8 rounded-xl shadow-lg animate-fade-in">
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Reset Password</h2>
-            {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4 text-sm">{error}</p>}
-            {message && <p className="bg-blue-100 text-blue-700 p-3 rounded-md mb-4 text-sm">{message}</p>}
-            <form onSubmit={handlePasswordReset}>
-                <div className="mb-6">
-                    <label className="block text-gray-600 mb-2" htmlFor="reset-email">Enter your email</label>
-                    <input type="email" id="reset-email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500" required />
-                </div>
-                <button type="submit" disabled={loading} className="w-full bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 transition duration-200 disabled:bg-gray-400">{loading ? 'Sending...' : 'Send Reset Link'}</button>
-            </form>
-            <p className="text-center mt-6 text-gray-600"><a href="#" onClick={() => setForm('signin')} className="text-sky-600 hover:underline">Back to Sign In</a></p>
+      <AuthForm
+        title="Reset Your Password"
+        fields={[
+          { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
+        ]}
+        buttonText="Send Reset Link"
+        onSubmit={handlePasswordReset}
+        error={error}
+      >
+        {message && <p className="text-sm text-green-600 text-center">{message}</p>}
+        <div className="text-sm text-center mt-4">
+          <a href="#" onClick={() => setView('signin')} className="font-medium text-blue-600 hover:text-blue-500">
+            Back to Sign In
+          </a>
         </div>
+      </AuthForm>
     );
 };
 
-// --- Dashboard Components ---
-
-const Dashboard = ({ userData }) => {
-    const renderContent = () => {
-        switch (userData.role) {
-            case 'super_admin':
-                return <SuperAdminDashboard />;
-            case 'admin':
-                return <div className="dashboard-card"><h3 className="text-2xl font-bold text-gray-800">Admin Dashboard</h3><p>Admin content goes here.</p></div>;
-            case 'shop_worker_import':
-                return <div className="dashboard-card"><h3 className="text-2xl font-bold text-gray-800">Shop Worker (Import)</h3><p>Import worker content goes here.</p></div>;
-            case 'shop_worker_export':
-                return <div className="dashboard-card"><h3 className="text-2xl font-bold text-gray-800">Shop Worker (Export)</h3><p>Export worker content goes here.</p></div>;
-            case 'pending':
-            default:
-                return <div className="dashboard-card"><h3 className="text-2xl font-bold text-gray-800">Awaiting Approval</h3><p>Your account is pending approval. Please check back later.</p></div>;
-        }
-    };
-
-    return (
-        <div className="container mx-auto px-6 py-8">
-            <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
-                <h2 className="text-3xl font-bold text-gray-800 mb-1">Welcome Back!</h2>
-                <p className="text-gray-600">Logged in as: {userData.email}</p>
-                <p className="text-gray-500 font-medium mt-1">Your Role: <span className="bg-sky-100 text-sky-700 text-sm font-semibold mr-2 px-2.5 py-0.5 rounded-full">{userData.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span></p>
-            </div>
-            {renderContent()}
-        </div>
-    );
-};
-
-const SuperAdminDashboard = () => {
+const SuperAdminDashboard = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [status, setStatus] = useState('');
 
     const fetchUsers = useCallback(async () => {
-        setError('');
-        setLoading(true);
         try {
-            const collectionPath = `artifacts/${app.options.appId}/public/data/users`;
-            const usersCollection = collection(db, collectionPath);
-            const userSnapshot = await getDocs(usersCollection);
-            const userList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setUsers(userList);
+            const usersCollectionRef = collection(db, 'users');
+            const querySnapshot = await getDocs(usersCollectionRef);
+            const usersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setUsers(usersList);
         } catch (err) {
-            setError('Failed to fetch users. Check console and security rules.');
+            setError('Failed to fetch users. You may not have permission.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -320,144 +304,196 @@ const SuperAdminDashboard = () => {
         fetchUsers();
     }, [fetchUsers]);
 
-    const handleRoleUpdate = async (userId, newRole) => {
-        setStatus(`Updating user...`);
+    const handleRoleChange = async (userId, newRole) => {
         try {
-            const userDocRef = doc(db, `artifacts/${app.options.appId}/public/data/users`, userId);
+            const userDocRef = doc(db, 'users', userId);
             await updateDoc(userDocRef, { role: newRole });
-            setStatus(`Successfully updated role to ${newRole}.`);
-            fetchUsers(); // Refresh the user list
-             setTimeout(() => setStatus(''), 3000);
+            // Refresh users list to show the change
+            fetchUsers();
         } catch (err) {
-            setStatus('Error updating role.');
+            setError('Failed to update role.');
             console.error(err);
         }
     };
-    
+
+    if (loading) {
+        return <div className="text-center p-10">Loading users...</div>;
+    }
+
+    if (error) {
+        return <div className="text-center p-10 text-red-500">{error}</div>;
+    }
+
     return (
-        <div className="bg-white p-8 rounded-xl shadow-lg">
-            <h3 className="text-2xl font-bold text-gray-800 mb-6">User Management</h3>
-            {loading && <p>Loading users...</p>}
-            {error && <p className="text-red-500">{error}</p>}
-            {status && <p className="text-green-600 mb-4">{status}</p>}
-            {!loading && !error && (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full bg-white">
-                        <thead className="bg-gray-100">
-                            <tr>
-                                <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">Email</th>
-                                <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">Current Role</th>
-                                <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600">Assign New Role</th>
+        <div className="p-8">
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">User Management</h2>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <table className="min-w-full leading-normal">
+                    <thead>
+                        <tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm">
+                            <th className="px-5 py-3 border-b-2 border-gray-200">User</th>
+                            <th className="px-5 py-3 border-b-2 border-gray-200">Email</th>
+                            <th className="px-5 py-3 border-b-2 border-gray-200">Role</th>
+                            <th className="px-5 py-3 border-b-2 border-gray-200">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map(user => (
+                            <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
+                                <td className="px-5 py-4">
+                                    <div className="flex items-center">
+                                        <div className="ml-3">
+                                            <p className="text-gray-900 whitespace-no-wrap">{user.displayName || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-5 py-4">
+                                    <p className="text-gray-900 whitespace-no-wrap">{user.email}</p>
+                                </td>
+                                <td className="px-5 py-4">
+                                    <span className={`relative inline-block px-3 py-1 font-semibold leading-tight rounded-full ${
+                                        user.role === 'super_admin' ? 'text-red-900 bg-red-200' :
+                                        user.role === 'admin' ? 'text-green-900 bg-green-200' :
+                                        user.role === 'shop_worker_import' ? 'text-blue-900 bg-blue-200' :
+                                        user.role === 'shop_worker_export' ? 'text-purple-900 bg-purple-200' :
+                                        'text-gray-700 bg-gray-200'
+                                    }`}>
+                                        <span aria-hidden className={`absolute inset-0 opacity-50 rounded-full`}></span>
+                                        <span className="relative">{user.role}</span>
+                                    </span>
+                                </td>
+                                <td className="px-5 py-4">
+                                     {user.id !== currentUser.uid && (
+                                        <select
+                                            value={user.role}
+                                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                            className="block w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                        >
+                                            <option value="pending">pending</option>
+                                            <option value="super_admin">super_admin</option>
+                                            <option value="admin">admin</option>
+                                            <option value="shop_worker_import">shop_worker_import</option>
+                                            <option value="shop_worker_export">shop_worker_export</option>
+                                        </select>
+                                     )}
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="text-gray-700">
-                           {users.map(user => <UserRow key={user.id} user={user} onUpdateRole={handleRoleUpdate} />)}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
 
-const UserRow = ({ user, onUpdateRole }) => {
-    const [selectedRole, setSelectedRole] = useState(user.role);
 
-    const handleSave = () => {
-        onUpdateRole(user.id, selectedRole);
-    };
-
-    const roles = ['super_admin', 'admin', 'shop_worker_import', 'shop_worker_export', 'pending'];
-
-    return (
-        <tr className="border-b hover:bg-gray-50">
-            <td className="py-3 px-4">{user.email}</td>
-            <td className="py-3 px-4">{user.role.replace(/_/g, ' ')}</td>
-            <td className="py-3 px-4 flex items-center space-x-2">
-                <select value={selectedRole} onChange={e => setSelectedRole(e.target.value)} className="w-full p-2 border rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                    {roles.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
-                </select>
-                <button onClick={handleSave} disabled={selectedRole === user.role} className="bg-sky-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-sky-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed">
-                    Save
-                </button>
-            </td>
-        </tr>
-    );
-};
-
-// --- Main App Component ---
-
-function App() {
-    const [user, setUser] = useState(null);
-    const [userData, setUserData] = useState(null);
-    const [loading, setLoading] = useState(true); // Initial auth check
-
-    useEffect(() => {
-        if (firebaseError) {
-            setLoading(false);
-            return;
-        }
-        // This listener handles auth state changes
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                const userDocRef = doc(db, `artifacts/${app.options.appId}/public/data/users`, currentUser.uid);
-                const userDoc = await getDoc(userDocRef);
-                if (userDoc.exists()) {
-                    setUserData(userDoc.data());
-                }
-                setUser(currentUser);
-            } else {
-                setUser(null);
-                setUserData(null);
-            }
-            setLoading(false);
-        });
-
-        return () => unsubscribe(); // Cleanup on unmount
-    }, []);
+const Dashboard = ({ user, onSignOut }) => {
     
-    const handleSignOut = async () => {
-        try {
-            await signOut(auth);
-        } catch (error) {
-            console.error("Sign Out Error", error);
+    const renderDashboardContent = () => {
+        switch (user.role) {
+            case 'super_admin':
+                return <SuperAdminDashboard currentUser={user} />;
+            case 'admin':
+                return <h2 className="text-2xl">Admin Dashboard</h2>;
+            case 'shop_worker_import':
+                return <h2 className="text-2xl">Shop Worker (Import) Dashboard</h2>;
+            case 'shop_worker_export':
+                return <h2 className="text-2xl">Shop Worker (Export) Dashboard</h2>;
+            default:
+                return (
+                    <div className="text-center p-10 bg-white rounded-xl shadow-lg">
+                        <h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2>
+                        <p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p>
+                    </div>
+                );
         }
     };
-
-    if (firebaseError) {
-        return (
-            <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg text-center">
-                    <h1 className="text-2xl font-bold text-red-700 mb-4">Configuration Error</h1>
-                    <p className="text-gray-600">Could not initialize the application. Please ensure your Firebase configuration is correct in the `.env.local` file.</p>
-                    <p className="mt-4 text-sm bg-red-100 text-red-600 p-2 rounded">{firebaseError}</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (loading) {
-        return (
-             <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="flex items-center space-x-4">
-                    <svg className="animate-spin h-8 w-8 text-amber-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span className="text-xl text-gray-600">Loading Application...</span>
-                </div>
-            </div>
-        );
-    }
-
+    
     return (
-        <div className="min-h-screen bg-gray-100 font-sans">
-            <Header user={user} handleSignOut={handleSignOut} />
-            <main>
-                {user && userData ? <Dashboard userData={userData} /> : <AuthPage />}
+        <div className="w-full">
+            <header className="bg-white shadow-md">
+                <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center">
+                         <img src="https://imgur.com/lfwJKXr" alt="Logo" className="h-12 w-auto"/>
+                         <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="text-gray-700 mr-4">Welcome, {user.displayName || user.email}</span>
+                        <button 
+                            onClick={onSignOut}
+                            className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+                        >
+                            Sign Out
+                        </button>
+                    </div>
+                </nav>
+            </header>
+            <main className="container mx-auto mt-8 px-6">
+                {renderDashboardContent()}
             </main>
         </div>
     );
+};
+
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('signin'); // 'signin', 'signup', 'forgot-password'
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!auth) {
+        setLoading(false);
+        return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        const userProfile = await getUserProfile(authUser.uid);
+        setUser({ ...authUser, ...userProfile });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setView('signin');
+    } catch (error) {
+      console.error("Error signing out: ", error);
+    }
+  };
+  
+  const handleLoginSuccess = (userProfile) => {
+      setUser({ ...auth.currentUser, ...userProfile });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl font-semibold text-gray-700">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center font-sans">
+      <div className="w-full">
+        {user ? (
+          <Dashboard user={user} onSignOut={handleSignOut} />
+        ) : (
+          <div className="flex items-center justify-center p-4">
+            {view === 'signin' && <SignIn setView={setView} onLoginSuccess={handleLoginSuccess} />}
+            {view === 'signup' && <SignUp setView={setView} onLoginSuccess={handleLoginSuccess} />}
+            {view === 'forgot-password' && <ForgotPassword setView={setView} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export default App;
