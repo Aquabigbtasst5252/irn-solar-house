@@ -17,7 +17,8 @@ import {
   setDoc,
   collection,
   getDocs,
-  updateDoc
+  updateDoc,
+  deleteDoc
 } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
@@ -53,15 +54,41 @@ const getUserProfile = async (uid) => {
 
 // --- React Components ---
 
+const Modal = ({ isOpen, onClose, onConfirm, title, children }) => {
+    if (!isOpen) return null;
+  
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+          <div className="mt-2">
+            <p className="text-sm text-gray-600">{children}</p>
+          </div>
+          <div className="mt-6 flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+};
+
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
       <img 
         src="https://imgur.com/lfwJKXr" 
         alt="IRN Solar House Logo" 
-        // --- LOGO SIZE ADJUSTMENT ---
-        // I've changed h-12 to h-24. You can use values like h-16, h-20, h-32 etc.
-        // The 'w-auto' class makes the width adjust automatically.
         className="h-24 w-auto mb-4" 
       />
       <h2 className="text-3xl font-bold text-center text-gray-800">{title}</h2>
@@ -204,17 +231,14 @@ const SignUp = ({ setView, onLoginSuccess }) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         
-        // Create a user profile document in Firestore
         const userProfile = {
           email: user.email,
-          displayName: user.email, // Default display name
-          role: 'pending', // Default role for new sign-ups
+          displayName: user.email, 
+          role: 'pending', 
           createdAt: new Date().toISOString(),
         };
         await setDoc(doc(db, "users", user.uid), userProfile);
-
         onLoginSuccess(userProfile);
-
       } catch (err) {
         setError(err.message);
       }
@@ -285,8 +309,11 @@ const SuperAdminDashboard = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [userToDelete, setUserToDelete] = useState(null);
 
     const fetchUsers = useCallback(async () => {
+        setLoading(true);
         try {
             const usersCollectionRef = collection(db, 'users');
             const querySnapshot = await getDocs(usersCollectionRef);
@@ -308,79 +335,148 @@ const SuperAdminDashboard = ({ currentUser }) => {
         try {
             const userDocRef = doc(db, 'users', userId);
             await updateDoc(userDocRef, { role: newRole });
-            // Refresh users list to show the change
-            fetchUsers();
+            fetchUsers(); // Refresh users list
         } catch (err) {
             setError('Failed to update role.');
             console.error(err);
         }
     };
 
-    if (loading) {
-        return <div className="text-center p-10">Loading users...</div>;
-    }
+    const handleDeleteUser = async () => {
+        if (!userToDelete) return;
+        try {
+            // IMPORTANT: This only deletes the user's data from Firestore.
+            // It does NOT delete their authentication account from Firebase Auth.
+            // For a full deletion, you must use a Firebase Cloud Function (backend code) 
+            // to call the Firebase Admin SDK, which has the necessary permissions.
+            const userDocRef = doc(db, 'users', userToDelete.id);
+            await deleteDoc(userDocRef);
+            setUserToDelete(null); // Close modal
+            fetchUsers(); // Refresh users list
+        } catch (err) {
+            setError('Failed to delete user data.');
+            console.error(err);
+            setUserToDelete(null);
+        }
+    };
 
-    if (error) {
-        return <div className="text-center p-10 text-red-500">{error}</div>;
-    }
+    const filteredUsers = users.filter(user => 
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.displayName && user.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    const userStats = {
+        total: users.length,
+        admins: users.filter(u => u.role === 'admin').length,
+        superAdmins: users.filter(u => u.role === 'super_admin').length,
+        pending: users.filter(u => u.role === 'pending').length,
+    };
+
+    if (loading) return <div className="text-center p-10">Loading users...</div>;
+    if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
 
     return (
-        <div className="p-8">
-            <h2 className="text-3xl font-bold mb-6 text-gray-800">User Management</h2>
+        <div className="p-4 sm:p-8">
+            <Modal
+                isOpen={!!userToDelete}
+                onClose={() => setUserToDelete(null)}
+                onConfirm={handleDeleteUser}
+                title="Delete User"
+            >
+                Are you sure you want to delete the user record for {userToDelete?.email}? This action cannot be undone.
+            </Modal>
+            
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">Super Admin Portal</h2>
+
+            {/* --- Stats Cards --- */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-lg flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium text-gray-500">Total Users</p>
+                        <p className="text-3xl font-bold text-gray-800">{userStats.total}</p>
+                    </div>
+                </div>
+                 <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <p className="text-sm font-medium text-gray-500">Super Admins</p>
+                    <p className="text-3xl font-bold text-red-600">{userStats.superAdmins}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <p className="text-sm font-medium text-gray-500">Admins</p>
+                    <p className="text-3xl font-bold text-green-600">{userStats.admins}</p>
+                </div>
+                <div className="bg-white p-6 rounded-xl shadow-lg">
+                    <p className="text-sm font-medium text-gray-500">Pending Users</p>
+                    <p className="text-3xl font-bold text-yellow-600">{userStats.pending}</p>
+                </div>
+            </div>
+
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                <table className="min-w-full leading-normal">
-                    <thead>
-                        <tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm">
-                            <th className="px-5 py-3 border-b-2 border-gray-200">User</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200">Email</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200">Role</th>
-                            <th className="px-5 py-3 border-b-2 border-gray-200">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {users.map(user => (
-                            <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
-                                <td className="px-5 py-4">
-                                    <div className="flex items-center">
-                                        <div className="ml-3">
-                                            <p className="text-gray-900 whitespace-no-wrap">{user.displayName || 'N/A'}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-5 py-4">
-                                    <p className="text-gray-900 whitespace-no-wrap">{user.email}</p>
-                                </td>
-                                <td className="px-5 py-4">
-                                    <span className={`relative inline-block px-3 py-1 font-semibold leading-tight rounded-full ${
-                                        user.role === 'super_admin' ? 'text-red-900 bg-red-200' :
-                                        user.role === 'admin' ? 'text-green-900 bg-green-200' :
-                                        user.role === 'shop_worker_import' ? 'text-blue-900 bg-blue-200' :
-                                        user.role === 'shop_worker_export' ? 'text-purple-900 bg-purple-200' :
-                                        'text-gray-700 bg-gray-200'
-                                    }`}>
-                                        <span aria-hidden className={`absolute inset-0 opacity-50 rounded-full`}></span>
-                                        <span className="relative">{user.role}</span>
-                                    </span>
-                                </td>
-                                <td className="px-5 py-4">
-                                     {user.id !== currentUser.uid && (
-                                        <select
-                                            value={user.role}
-                                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                                            className="block w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                        >
-                                            <option value="pending">pending</option>
-                                            <option value="super_admin">super_admin</option>
-                                            <option value="admin">admin</option>
-                                            <option value="shop_worker_import">shop_worker_import</option>
-                                            <option value="shop_worker_export">shop_worker_export</option>
-                                        </select>
-                                     )}
-                                </td>
+                <div className="p-4 border-b border-gray-200">
+                     <input
+                        type="text"
+                        placeholder="Search by name or email..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full leading-normal">
+                        <thead>
+                            <tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm">
+                                <th className="px-5 py-3 border-b-2 border-gray-200">User</th>
+                                <th className="px-5 py-3 border-b-2 border-gray-200">Email</th>
+                                <th className="px-5 py-3 border-b-2 border-gray-200">Role</th>
+                                <th className="px-5 py-3 border-b-2 border-gray-200 text-center">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {filteredUsers.map(user => (
+                                <tr key={user.id} className="border-b border-gray-200 hover:bg-gray-50">
+                                    <td className="px-5 py-4 text-sm bg-white">
+                                        <p className="text-gray-900 whitespace-no-wrap">{user.displayName || 'N/A'}</p>
+                                    </td>
+                                    <td className="px-5 py-4 text-sm bg-white">
+                                        <p className="text-gray-900 whitespace-no-wrap">{user.email}</p>
+                                    </td>
+                                    <td className="px-5 py-4 text-sm bg-white">
+                                        <span className={`relative inline-block px-3 py-1 font-semibold leading-tight rounded-full ${
+                                            user.role === 'super_admin' ? 'text-red-900 bg-red-200' :
+                                            user.role === 'admin' ? 'text-green-900 bg-green-200' :
+                                            'text-gray-700 bg-gray-200'
+                                        }`}>
+                                            <span className="relative">{user.role}</span>
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-4 text-sm bg-white text-center">
+                                        {user.id !== currentUser.uid ? (
+                                            <div className="flex items-center justify-center space-x-2">
+                                                <select
+                                                    value={user.role}
+                                                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                                    className="w-48 bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none"
+                                                >
+                                                    <option value="pending">pending</option>
+                                                    <option value="super_admin">super_admin</option>
+                                                    <option value="admin">admin</option>
+                                                    <option value="shop_worker_import">shop_worker_import</option>
+                                                    <option value="shop_worker_export">shop_worker_export</option>
+                                                </select>
+                                                <button onClick={() => setUserToDelete(user)} className="text-red-600 hover:text-red-900">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-500">Cannot edit self</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
@@ -481,12 +577,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center font-sans">
+    <div className="min-h-screen bg-gray-100 font-sans">
       <div className="w-full">
         {user ? (
           <Dashboard user={user} onSignOut={handleSignOut} />
         ) : (
-          <div className="flex items-center justify-center p-4">
+          <div className="min-h-screen flex items-center justify-center p-4">
             {view === 'signin' && <SignIn setView={setView} onLoginSuccess={handleLoginSuccess} />}
             {view === 'signup' && <SignUp setView={setView} onLoginSuccess={handleLoginSuccess} />}
             {view === 'forgot-password' && <ForgotPassword setView={setView} />}
