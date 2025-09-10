@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
+import {
+  getFirestore,
+  doc,
+  getDoc,
   setDoc,
   collection,
   getDocs,
@@ -86,14 +86,14 @@ const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
-      <img 
-        src="https://i.imgur.com/8f9e60a.png" 
-        alt="IRN Solar House Logo" 
-        className="h-24 w-auto mb-4" 
+      <img
+        src="https://i.imgur.com/8f9e60a.png"
+        alt="IRN Solar House Logo"
+        className="h-24 w-auto mb-4"
       />
       <h2 className="text-3xl font-bold text-center text-gray-800">{title}</h2>
     </div>
-    
+
     <form className="space-y-6" onSubmit={onSubmit}>
       {fields.map(field => (
         <div key={field.id}>
@@ -110,9 +110,9 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
           />
         </div>
       ))}
-      
+
       {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-      
+
       <div>
         <button
           type="submit"
@@ -152,7 +152,7 @@ const SignIn = ({ setView, onLoginSuccess }) => {
             const newUserProfile = {
                 email: user.email,
                 displayName: user.displayName,
-                role: 'pending', 
+                role: 'pending',
                 createdAt: Timestamp.now(),
             };
             await setDoc(doc(db, 'users', user.uid), newUserProfile);
@@ -198,7 +198,7 @@ const ForgotPassword = ({ setView }) => {
         setError("Failed to send reset email. Please check the address.");
       }
     };
-  
+
     return (
       <AuthForm
         title="Reset Your Password"
@@ -256,7 +256,7 @@ const UserManagementPortal = ({ currentUser }) => {
         }
     };
 
-    const filteredUsers = users.filter(user => 
+    const filteredUsers = users.filter(user =>
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (user.displayName && user.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
@@ -283,7 +283,7 @@ const UserManagementPortal = ({ currentUser }) => {
                     </div>
                  </div>
             </Modal>
-            
+
             <h2 className="text-3xl font-bold mb-6 text-gray-800">User Management</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -336,7 +336,7 @@ const CustomerManagement = ({ portalType }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({});
@@ -409,7 +409,7 @@ const CustomerManagement = ({ portalType }) => {
             console.error(err);
         }
     };
-    
+
     const openAddModal = () => {
         setIsEditing(false);
         setFormData({ country: isImport ? 'Sri Lanka' : '' });
@@ -461,12 +461,12 @@ const CustomerManagement = ({ portalType }) => {
                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Customer'}</button></div>
                 </form>
             </Modal>
-            
+
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-gray-800">{portalTitle}</h2>
                 <button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Customer</button>
             </div>
-            
+
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by name, email, or phone..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
                 <div className="overflow-x-auto">
@@ -515,7 +515,7 @@ const ShopManagement = ({ currentUser }) => {
     useEffect(() => { fetchShops(); }, [fetchShops]);
 
     const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    
+
     const handleWorkerChange = (index, e) => {
         const updatedWorkers = [...formData.workers];
         updatedWorkers[index][e.target.name] = e.target.value;
@@ -525,7 +525,7 @@ const ShopManagement = ({ currentUser }) => {
     const addWorker = () => {
         setFormData(prev => ({ ...prev, workers: [...(prev.workers || []), { name: '', telephone: '', employeeNumber: '', role: '' }] }));
     };
-    
+
     const removeWorker = (index) => {
         const updatedWorkers = [...formData.workers];
         updatedWorkers.splice(index, 1);
@@ -545,12 +545,12 @@ const ShopManagement = ({ currentUser }) => {
             setIsModalOpen(false);
         } catch (err) { setError("Failed to save shop details."); console.error(err) }
     };
-    
+
     const openAddModal = () => { setIsEditing(false); setFormData({ workers: [] }); setIsModalOpen(true); };
     const openEditModal = (shop) => { setIsEditing(true); setFormData(shop); setIsModalOpen(true); };
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this shop?')) {
-            try { 
+            try {
                 await deleteDoc(doc(db, 'shops', id));
                 setShops(prev => prev.filter(s => s.id !== id));
             }
@@ -631,7 +631,7 @@ const StockManagement = () => {
     useEffect(() => { fetchStock(); }, [fetchStock]);
 
     const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    
+
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -671,7 +671,7 @@ const StockManagement = () => {
                 setStock(prev => prev.map(item => item.id === dataToSave.id ? dataToSave : item));
             } else {
                 // Ensure new items start with 0 quantity, to be updated by imports
-                dataToSave.qty = 0; 
+                dataToSave.qty = 0;
                 const newDocRef = await addDoc(collection(db, 'import_stock'), dataToSave);
                 setStock(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
             }
@@ -680,7 +680,7 @@ const StockManagement = () => {
         } catch (err) { setError("Failed to save stock item."); console.error(err); }
         finally { setUploadProgress(0); }
     };
-    
+
     const handleDelete = async (item) => {
         if (window.confirm('Are you sure? This will also delete the item image.')) {
             try {
@@ -693,7 +693,7 @@ const StockManagement = () => {
             catch (err) { setError("Failed to delete item."); console.error(err); }
         }
     };
-    
+
     const viewSerials = async (item) => {
         setSerialsLoading(true);
         setIsSerialsModalOpen(true);
@@ -801,7 +801,7 @@ const SupplierManagement = () => {
     useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
 
     const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    
+
     const handleContactChange = (index, e) => {
         const updatedContacts = [...formData.contactPersons];
         updatedContacts[index][e.target.name] = e.target.value;
@@ -811,7 +811,7 @@ const SupplierManagement = () => {
     const addContact = () => {
         setFormData(prev => ({ ...prev, contactPersons: [...(prev.contactPersons || []), { name: '', email: '', contactNumber: '' }] }));
     };
-    
+
     const removeContact = (index) => {
         const updatedContacts = [...formData.contactPersons];
         updatedContacts.splice(index, 1);
@@ -831,19 +831,19 @@ const SupplierManagement = () => {
             setIsModalOpen(false);
         } catch (err) { setError("Failed to save supplier details."); console.error(err) }
     };
-    
+
     const openAddModal = () => { setIsEditing(false); setFormData({ contactPersons: [] }); setIsModalOpen(true); };
     const openEditModal = (supplier) => { setIsEditing(true); setFormData(supplier); setIsModalOpen(true); };
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this supplier?')) {
-            try { 
+            try {
                 await deleteDoc(doc(db, 'suppliers', id));
                 setSuppliers(prev => prev.filter(s => s.id !== id));
             }
             catch (err) { setError("Failed to delete supplier."); }
         }
     };
-    
+
     if(loading) return <div className="p-8 text-center">Loading Suppliers...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
@@ -887,7 +887,6 @@ const SupplierManagement = () => {
         </div>
     );
 };
-// +++ NEW COMPONENT +++
 const ImportManagementPortal = () => {
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [imports, setImports] = useState([]);
@@ -926,7 +925,7 @@ const ImportManagementPortal = () => {
             setLoading(false);
         }
     }, []);
-    
+
     useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
 
     const handleCreateNew = async () => {
@@ -953,7 +952,7 @@ const ImportManagementPortal = () => {
         }
         setView('form');
     };
-    
+
     const handleAddItem = () => {
         const stockItem = stockItems.find(s => s.id === formSelections.selectedStockId);
         if (!stockItem || formSelections.selectedQty <= 0) return;
@@ -968,7 +967,7 @@ const ImportManagementPortal = () => {
         setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
         setFormSelections({ selectedStockId: '', selectedQty: 1, selectedUOM: '', selectedUnitPrice: 0 }); // Reset
     };
-    
+
     const handleCalculate = () => {
         const { items, costsUSD, costsLKR, exchangeRate } = formData;
         if (!exchangeRate || exchangeRate <= 0) {
@@ -977,25 +976,22 @@ const ImportManagementPortal = () => {
         }
 
         const totalItemCostUSD = items.reduce((acc, item) => acc + (item.unitPriceUSD * item.qty), 0);
-        if (totalItemCostUSD === 0) return; // Avoid division by zero
+        if (totalItemCostUSD === 0) return;
 
         const totalAdditionalCostUSD = Object.values(costsUSD).reduce((sum, val) => sum + parseFloat(val || 0), 0);
         const totalAdditionalCostLKR = Object.values(costsLKR).reduce((sum, val) => sum + parseFloat(val || 0), 0);
-        
+
         const grandTotalLKR = ((totalItemCostUSD + totalAdditionalCostUSD) * exchangeRate) + totalAdditionalCostLKR;
         const totalLandedCostToAdd = grandTotalLKR - (totalItemCostUSD * exchangeRate);
 
-        let serialCounter = 1;
         const updatedItems = items.map(item => {
             const itemTotalUSD = item.unitPriceUSD * item.qty;
             const itemValuePercentage = itemTotalUSD / totalItemCostUSD;
             const landedCostForItem = totalLandedCostToAdd * itemValuePercentage;
             const finalTotalCostLKR = (itemTotalUSD * exchangeRate) + landedCostForItem;
             const finalUnitPriceLKR = finalTotalCostLKR / item.qty;
-            
-            const serials = Array.from({ length: item.qty }, () => `SN${String(serialCounter++).padStart(5, '0')}`);
-            
-            return { ...item, finalUnitPriceLKR, serials };
+
+            return { ...item, finalUnitPriceLKR, serials: [] };
         });
 
         setFormData(prev => ({ ...prev, items: updatedItems }));
@@ -1010,21 +1006,33 @@ const ImportManagementPortal = () => {
         setLoading(true);
         try {
             const batch = writeBatch(db);
-            
-            // 1. Set the main import document
-            const importDocRef = doc(db, 'imports', formData.invoiceNo);
-            batch.set(importDocRef, { ...formData, createdAt: Timestamp.now() });
+            const itemsWithSerials = [];
 
-            // 2. Update stock quantities and add serial numbers
             for (const item of formData.items) {
+                const serialsColRef = collection(db, 'import_stock', item.stockItemId, 'serials');
+                const existingSerialsSnap = await getDocs(serialsColRef);
+                const startingSerialIndex = existingSerialsSnap.size + 1;
+
+                const newSerials = Array.from(
+                    { length: item.qty },
+                    (_, i) => `SN${String(startingSerialIndex + i).padStart(5, '0')}`
+                );
+
+                itemsWithSerials.push({ ...item, serials: newSerials });
+            }
+
+            const importDocRef = doc(db, 'imports', formData.invoiceNo);
+            const dataToSave = { ...formData, items: itemsWithSerials, createdAt: Timestamp.now() };
+            batch.set(importDocRef, dataToSave);
+
+            for (const item of itemsWithSerials) {
                 const stockDocRef = doc(db, 'import_stock', item.stockItemId);
                 const stockDocSnap = await getDoc(stockDocRef);
                 if (!stockDocSnap.exists()) throw new Error(`Stock item ${item.name} not found!`);
-                
+
                 const currentQty = stockDocSnap.data().qty || 0;
                 batch.update(stockDocRef, { qty: currentQty + item.qty });
-                
-                // Add serials to subcollection
+
                 for (const serialNo of item.serials) {
                     const serialDocRef = doc(db, 'import_stock', item.stockItemId, 'serials', serialNo);
                     batch.set(serialDocRef, {
@@ -1034,9 +1042,9 @@ const ImportManagementPortal = () => {
                     });
                 }
             }
-            
+
             await batch.commit();
-            await fetchInitialData(); // Refresh list
+            await fetchInitialData();
             setView('list');
 
         } catch (err) {
@@ -1102,7 +1110,7 @@ const ImportManagementPortal = () => {
                             <td className="px-4 py-2">{item.name}</td><td className="px-4 py-2">{item.qty}</td><td className="px-4 py-2">{item.unitPriceUSD.toFixed(2)}</td>
                             <td className="px-4 py-2">{(item.unitPriceUSD * item.qty).toFixed(2)}</td>
                             <td className="px-4 py-2 font-semibold">{item.finalUnitPriceLKR ? item.finalUnitPriceLKR.toFixed(2) : 'N/A'}</td>
-                             <td className="px-4 py-2">{item.serials ? <select className="w-full p-1 border rounded bg-white text-sm"><option>{item.serials.length} serials generated</option>{item.serials.map(s => <option key={s} disabled>{s}</option>)}</select> : 'N/A'}</td>
+                             <td className="px-4 py-2">{isCalculated ? <span className="text-sm text-gray-500">{item.qty} serials will be generated on save</span> : 'N/A'}</td>
                         </tr>))}</tbody>
                     </table>
                 </div>
@@ -1110,12 +1118,12 @@ const ImportManagementPortal = () => {
                 {/* --- ACTION BUTTONS --- */}
                 <div className="flex justify-end space-x-4">
                     {isCalculated && <button onClick={() => setIsCalculated(false)} className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">Edit</button>}
-                    <button onClick={handleCalculate} disabled={isCalculated} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">Calculate Final Prices & Serials</button>
+                    <button onClick={handleCalculate} disabled={isCalculated} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">Calculate Final Prices</button>
                 </div>
             </div>
         );
     }
-    
+
     return (
         <div className="p-4 sm:p-8">
             <div className="flex justify-between items-center mb-6">
@@ -1218,7 +1226,7 @@ const Dashboard = ({ user, onSignOut }) => {
     const hasImportAccess = ['super_admin', 'admin', 'shop_worker_import'].includes(user.role);
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
-    
+
     useEffect(() => {
         if (hasImportAccess) setCurrentView('import_stock_management');
         else if (hasExportAccess) setCurrentView('export_dashboard');
@@ -1239,7 +1247,7 @@ const Dashboard = ({ user, onSignOut }) => {
             default: return (<div>Welcome!</div>);
         }
     };
-    
+
     if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
 
     const NavLink = ({ view, children }) => {
@@ -1303,7 +1311,7 @@ export default function App() {
 
   const handleSignOut = async () => { try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); } };
   const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
-  
+
   const renderContent = () => {
       if (loading) { return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>); }
       if (user) { return <Dashboard user={user} onSignOut={handleSignOut} />; }
