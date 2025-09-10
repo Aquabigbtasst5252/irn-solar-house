@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -602,7 +602,7 @@ const StockManagement = () => {
         try {
             const response = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
             const data = await response.json();
-            const rate = data.lkr;
+            const rate = data.usd.lkr; // Corrected path
             setExchangeRate(rate);
             setFormData(prev => ({...prev, exchangeRate: rate, exchangeRateDate: new Date().toLocaleDateString() }));
         } catch (err) {
@@ -655,7 +655,22 @@ const StockManagement = () => {
         setFormData(prev => ({ ...prev, serials: prev.serials.filter((_, i) => i !== index)}));
     };
 
-    const uploadImage = async (file) => { /* ... implementation unchanged ... */ };
+    const uploadImage = async (file) => {
+        return new Promise((resolve, reject) => {
+            const filePath = `products/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, filePath);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+                (error) => reject(error),
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve({ downloadURL, filePath });
+                }
+            );
+        });
+    };
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
@@ -669,7 +684,11 @@ const StockManagement = () => {
         dataToSave.calculatedOnDate = Timestamp.now();
         
         try {
-            if (dataToSave.pictureFile) { /* ... implementation unchanged ... */ }
+            if (dataToSave.pictureFile) {
+                const { downloadURL, filePath } = await uploadImage(dataToSave.pictureFile);
+                dataToSave.imageUrl = downloadURL;
+                dataToSave.imagePath = filePath;
+            }
             delete dataToSave.pictureFile;
 
             if (isEditing) {
@@ -683,7 +702,18 @@ const StockManagement = () => {
         finally { setUploadProgress(0); }
     };
     
-    const handleDelete = async (item) => { /* ... implementation unchanged ... */ };
+    const handleDelete = async (item) => {
+        if (window.confirm('Are you sure? This will also delete the item image.')) {
+            try {
+                if (item.imagePath) {
+                    await deleteObject(ref(storage, item.imagePath));
+                }
+                await deleteDoc(doc(db, 'import_stock', item.id));
+                fetchStock();
+            }
+            catch (err) { setError("Failed to delete item."); console.error(err); }
+        }
+    };
 
     const finalPriceCalculation = useMemo(() => {
         const { unitPrice, fob, freight, handling_overseas, insurance, bank, duty, vat, other, clearing, transport, unload, manualExchangeRate } = formData;
@@ -758,7 +788,6 @@ const StockManagement = () => {
                     </fieldset>
 
                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Image & Serial Numbers</legend>
-                        {/* ... image upload is the same ... */}
                         <div><label>Product Picture</label><input type="file" name="pictureFile" onChange={handleFileChange} className="w-full p-2 border rounded"/></div>
                         {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full mt-2"><div className="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style={{width: `${uploadProgress}%`}}> {Math.round(uploadProgress)}%</div></div>}
                         {formData.imageUrl && !formData.pictureFile && <img src={formData.imageUrl} alt="Product" className="h-24 w-auto mt-2 rounded"/>}
