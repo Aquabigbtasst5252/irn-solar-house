@@ -67,7 +67,7 @@ const Modal = ({ isOpen, onClose, children }) => {
     if (!isOpen) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl relative max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl relative max-h-[90vh] overflow-y-auto">
             <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
             {children}
         </div>
@@ -776,7 +776,7 @@ const Dashboard = ({ user, onSignOut }) => {
     
     useEffect(() => {
         if (hasImportAccess) setCurrentView('import_stock_management');
-        else if (hasExportAccess) setCurrentView('export_shop_management');
+        else if (hasExportAccess) setCurrentView('export_dashboard');
     }, [hasImportAccess, hasExportAccess]);
 
 
@@ -785,9 +785,9 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'import_dashboard': return <ImportPortal />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement />;
+            case 'import_shop_management': return <ShopManagement />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
-            case 'export_shop_management': return <ShopManagement />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
             default: return (<div>Welcome!</div>);
         }
@@ -811,10 +811,10 @@ const Dashboard = ({ user, onSignOut }) => {
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
                         {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
-                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink></div>}
+                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink><NavLink view="import_shop_management">Shop Management</NavLink></div>}
                         </div>)}
                         {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
-                            {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink><NavLink view="export_shop_management">Shop Management</NavLink></div>}
+                            {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
                         </div>)}
                         {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
                             {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="user_management">User Management</NavLink></div>}
