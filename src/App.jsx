@@ -21,22 +21,25 @@ import {
   addDoc,
   Timestamp
 } from 'firebase/firestore';
+import {
+    getStorage,
+    ref,
+    uploadBytesResumable,
+    getDownloadURL,
+    deleteObject
+} from 'firebase/storage';
 
 // --- Firebase Configuration ---
-const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
+const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.appspot.com","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
 
-let firebaseApp;
-let auth;
-let db;
-
+let firebaseApp, auth, db, storage;
 try {
   const firebaseConfig = JSON.parse(firebaseConfigString);
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-} catch (error) {
-  console.error("Error initializing Firebase:", error);
-}
+  storage = getStorage(firebaseApp);
+} catch (error) { console.error("Error initializing Firebase:", error); }
 
 // --- Helper Functions & Data ---
 const getUserProfile = async (uid) => {
@@ -48,10 +51,7 @@ const getUserProfile = async (uid) => {
   }
   return null;
 };
-
 const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
-
-// --- ICON COMPONENTS ---
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
 const ShieldCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286zm0 13.036h.008v.008h-.008v-.008z" /></svg>;
@@ -60,20 +60,20 @@ const PencilIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const PlusCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>;
+const unitsOfMeasure = ["pieces (pcs)", "sets", "units", "meters (m)", "kilograms (kg)", "liters (L)"];
 
 // --- Reusable Components ---
 const Modal = ({ isOpen, onClose, children }) => {
     if (!isOpen) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl relative max-h-[90vh] overflow-y-auto">
             <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
             {children}
         </div>
       </div>
     );
 };
-// ... (Auth Components are unchanged and omitted for brevity)
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
@@ -116,7 +116,6 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
     {children}
   </div>
 );
-
 const SignIn = ({ setView, onLoginSuccess }) => {
   const [error, setError] = useState('');
 
@@ -175,7 +174,6 @@ const SignIn = ({ setView, onLoginSuccess }) => {
     </AuthForm>
   );
 };
-
 const ForgotPassword = ({ setView }) => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -205,7 +203,6 @@ const ForgotPassword = ({ setView }) => {
       </AuthForm>
     );
 };
-
 
 // --- Portal Components ---
 const UserManagementPortal = ({ currentUser }) => {
@@ -321,7 +318,6 @@ const UserManagementPortal = ({ currentUser }) => {
         </div>
     );
 };
-
 const CustomerManagement = ({ portalType }) => {
     const isImport = portalType === 'import';
     const collectionName = isImport ? 'import_customers' : 'export_customers';
@@ -489,11 +485,227 @@ const CustomerManagement = ({ portalType }) => {
         </div>
     );
 };
+const ShopManagement = () => {
+    const [shops, setShops] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({});
 
-// ... (Other components are unchanged and omitted for brevity)
-const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for stock management, invoicing, and costing for the solar import business will be built here.</p></div>;
+    const fetchShops = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'shops'));
+            setShops(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (err) { setError("Failed to fetch shops."); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchShops(); }, [fetchShops]);
+
+    const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                await updateDoc(doc(db, 'shops', formData.id), formData);
+            } else {
+                await addDoc(collection(db, 'shops'), formData);
+            }
+            fetchShops();
+            setIsModalOpen(false);
+        } catch (err) { setError("Failed to save shop details."); console.error(err) }
+    };
+    
+    const openAddModal = () => { setIsEditing(false); setFormData({}); setIsModalOpen(true); };
+    const openEditModal = (shop) => { setIsEditing(true); setFormData(shop); setIsModalOpen(true); };
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this shop?')) {
+            try { await deleteDoc(doc(db, 'shops', id)); fetchShops(); }
+            catch (err) { setError("Failed to delete shop."); }
+        }
+    };
+
+    if(loading) return <div className="p-8 text-center">Loading Shops...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Shop' : 'Register New Shop'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                     <div><label className="block text-sm font-medium">Shop Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                     <div><label className="block text-sm font-medium">Address</label><input type="text" name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                     <div><label className="block text-sm font-medium">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                     <div><label className="block text-sm font-medium">Email</label><input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                     <div><label className="block text-sm font-medium">Shop Worker Names (comma-separated)</label><textarea name="workers" value={formData.workers || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"></textarea></div>
+                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Shop'}</button></div>
+                </form>
+            </Modal>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Shop Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Shop</button></div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Name</th><th className="px-5 py-3 text-left">Contact</th><th className="px-5 py-3 text-left">Workers</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <tbody>{shops.map(shop => (<tr key={shop.id} className="border-b hover:bg-gray-50">
+                    <td className="px-5 py-4"><p className="font-semibold">{shop.name}</p><p className="text-sm text-gray-600">{shop.address}</p></td>
+                    <td className="px-5 py-4 text-sm"><p>{shop.telephone}</p><p>{shop.email}</p></td>
+                    <td className="px-5 py-4 text-sm">{shop.workers}</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button onClick={() => openEditModal(shop)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(shop.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
+                </tr>))}</tbody></table></div>
+        </div>
+    );
+};
+const StockManagement = () => {
+    const [stock, setStock] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({});
+    const [uploadProgress, setUploadProgress] = useState(0);
+
+    const fetchStock = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'import_stock'));
+            setStock(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (err) { setError("Failed to fetch stock items."); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchStock(); }, [fetchStock]);
+
+    const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleNumberChange = e => setFormData(prev => ({ ...prev, [e.target.name]: parseFloat(e.target.value) || 0 }));
+    
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setFormData(prev => ({ ...prev, pictureFile: file }));
+    };
+
+    const uploadImage = async (file) => {
+        return new Promise((resolve, reject) => {
+            const filePath = `products/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, filePath);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+                (error) => reject(error),
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve({ downloadURL, filePath });
+                }
+            );
+        });
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        let dataToSave = { ...formData };
+        
+        const { unitPrice, fob, freight, handling, insurance, bank, duty, vat, other, clearing, transport, unload } = dataToSave;
+        const totalLandedCost = [fob, freight, handling, insurance, bank, duty, vat, other, clearing, transport, unload].reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+        dataToSave.finalUnitPrice = (parseFloat(unitPrice) || 0) + totalLandedCost;
+
+        try {
+            if (dataToSave.pictureFile) {
+                const { downloadURL, filePath } = await uploadImage(dataToSave.pictureFile);
+                dataToSave.imageUrl = downloadURL;
+                dataToSave.imagePath = filePath;
+            }
+            delete dataToSave.pictureFile;
+
+            if (isEditing) {
+                await updateDoc(doc(db, 'import_stock', dataToSave.id), dataToSave);
+            } else {
+                await addDoc(collection(db, 'import_stock'), dataToSave);
+            }
+            fetchStock();
+            setIsModalOpen(false);
+        } catch (err) { setError("Failed to save stock item."); console.error(err); }
+        finally { setUploadProgress(0); }
+    };
+    
+    const openAddModal = () => { setIsEditing(false); setFormData({}); setIsModalOpen(true); };
+    const openEditModal = (item) => { setIsEditing(true); setFormData(item); setIsModalOpen(true); };
+    const handleDelete = async (item) => {
+        if (window.confirm('Are you sure? This will also delete the item image.')) {
+            try {
+                if (item.imagePath) {
+                    await deleteObject(ref(storage, item.imagePath));
+                }
+                await deleteDoc(doc(db, 'import_stock', item.id));
+                fetchStock();
+            }
+            catch (err) { setError("Failed to delete item."); console.error(err); }
+        }
+    };
+
+    if(loading) return <div className="p-8 text-center">Loading Stock...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Stock Item' : 'Add New Stock Item'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Item Details</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label>Item Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Model</label><input type="text" name="model" value={formData.model || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description || ''} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea></div>
+                            <div><label>Supplier</label><input type="text" name="supplier" value={formData.supplier || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                        </div>
+                    </fieldset>
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Specifications</legend>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div><label>Rated Voltage</label><input type="text" name="voltage" value={formData.voltage || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Power</label><input type="text" name="power" value={formData.power || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Rated Current</label><input type="text" name="current" value={formData.current || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>H.Max</label><input type="text" name="hmax" value={formData.hmax || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Q.Max</label><input type="text" name="qmax" value={formData.qmax || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Outlet</label><input type="text" name="outlet" value={formData.outlet || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                        </div>
+                    </fieldset>
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Pricing & Quantity</legend>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div><label>Quantity</label><input type="number" name="qty" required value={formData.qty || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
+                            <div><label>Unit of Measure</label><select name="uom" value={formData.uom || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="">Select</option>{unitsOfMeasure.map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+                            <div><label>Unit Price (USD)</label><input type="number" step="0.01" name="unitPrice" required value={formData.unitPrice || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
+                        </div>
+                    </fieldset>
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Additional Import Costs (LKR)</legend>
+                        <p className="text-xs text-gray-500 mb-2">Enter all additional costs to calculate the final landed unit price.</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                           {['fob', 'freight', 'handling', 'insurance', 'bank', 'duty', 'vat', 'other', 'clearing', 'transport', 'unload'].map(cost => (
+                                <div key={cost}><label className="capitalize text-sm">{cost}</label><input type="number" step="0.01" name={cost} value={formData[cost] || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
+                           ))}
+                        </div>
+                    </fieldset>
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Image & Serial Numbers</legend>
+                        <div><label>Product Picture</label><input type="file" name="pictureFile" onChange={handleFileChange} className="w-full p-2 border rounded"/></div>
+                        {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full mt-2"><div className="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style={{width: `${uploadProgress}%`}}> {Math.round(uploadProgress)}%</div></div>}
+                        {formData.imageUrl && !formData.pictureFile && <img src={formData.imageUrl} alt="Product" className="h-24 w-auto mt-2 rounded"/>}
+                        <div><label>Serial Numbers (comma-separated)</label><textarea name="serials" value={formData.serials || ''} onChange={handleInputChange} className="w-full p-2 border rounded" placeholder="SN001, SN002, SN003..."></textarea></div>
+                    </fieldset>
+                    <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Item'}</button></div>
+                </form>
+            </Modal>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Stock Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Item</button></div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-left">Unit Price (Final)</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <tbody>{stock.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50">
+                    <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
+                    <td className="px-5 py-4 text-sm">{item.qty} {item.uom}</td>
+                    <td className="px-5 py-4 text-sm font-semibold">LKR {item.finalUnitPrice?.toFixed(2)}</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button className="text-gray-500 hover:text-gray-800 text-sm">Assign Serials</button><button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
+                </tr>))}</tbody></table></div>
+        </div>
+    );
+};
+const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
-
 const HomePage = ({ onSignInClick }) => {
     return (
         <div className="bg-white text-gray-800">
@@ -537,6 +749,7 @@ const HomePage = ({ onSignInClick }) => {
     );
 };
 
+// --- Main App & Dashboard Structure ---
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('import_dashboard');
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
@@ -547,7 +760,6 @@ const Dashboard = ({ user, onSignOut }) => {
     const importDropdownRef = useRef(null);
     const exportDropdownRef = useRef(null);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) setAdminDropdownOpen(false);
@@ -562,39 +774,31 @@ const Dashboard = ({ user, onSignOut }) => {
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
     
-    // Set initial view based on role
     useEffect(() => {
-        if (hasImportAccess) setCurrentView('import_dashboard');
-        else if (hasExportAccess) setCurrentView('export_dashboard');
+        if (hasImportAccess) setCurrentView('import_stock_management');
+        else if (hasExportAccess) setCurrentView('export_shop_management');
     }, [hasImportAccess, hasExportAccess]);
 
 
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportPortal />;
-            case 'export_dashboard': return <ExportPortal />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
+            case 'import_stock_management': return <StockManagement />;
+            case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
+            case 'export_shop_management': return <ShopManagement />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
-            default:
-                return (<div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div>);
+            default: return (<div>Welcome!</div>);
         }
     };
     
-    if (user.role === 'pending') {
-         return (
-             <div className="min-h-screen bg-gray-50 flex flex-col">
-                <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header>
-                <main className="flex-grow flex items-center justify-center">
-                    <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div>
-                </main>
-             </div>
-         );
-    }
+    if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
 
     const NavLink = ({ view, children }) => {
         const isActive = currentView === view;
-        return <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView(view); setAdminDropdownOpen(false); setImportDropdownOpen(false); setExportDropdownOpen(false); }} className={`block px-4 py-2 text-sm ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>{children}</a>
+        const closeAllDropdowns = () => { setAdminDropdownOpen(false); setImportDropdownOpen(false); setExportDropdownOpen(false); };
+        return <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView(view); closeAllDropdowns(); }} className={`block px-4 py-2 text-sm ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>{children}</a>
     };
 
     return (
@@ -602,34 +806,19 @@ const Dashboard = ({ user, onSignOut }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-6">
                     <div className="flex justify-between items-center py-4">
-                        <div className="flex items-center">
-                             <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
-                             <span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span>
-                        </div>
-                        <div className="flex items-center">
-                            <span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span>
-                            <button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300">Sign Out</button>
-                        </div>
+                        <div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
+                        <div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
-                        {hasImportAccess && (
-                            <div className="relative" ref={importDropdownRef}>
-                                <button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
-                                {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink></div>}
-                            </div>
-                        )}
-                        {hasExportAccess && (
-                           <div className="relative" ref={exportDropdownRef}>
-                                <button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
-                                {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
-                            </div>
-                        )}
-                        {hasAdminAccess && (
-                            <div className="relative" ref={adminDropdownRef}>
-                                <button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
-                                {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="user_management">User Management</NavLink></div>}
-                            </div>
-                        )}
+                        {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
+                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink></div>}
+                        </div>)}
+                        {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
+                            {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink><NavLink view="export_shop_management">Shop Management</NavLink></div>}
+                        </div>)}
+                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
+                            {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="user_management">User Management</NavLink></div>}
+                        </div>)}
                     </nav>
                 </div>
             </header>
@@ -658,21 +847,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleSignOut = async () => {
-    try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); }
-  };
-  
-  const handleLoginSuccess = (userProfile) => {
-      setUser({ ...auth.currentUser, ...userProfile });
-  };
+  const handleSignOut = async () => { try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); } };
+  const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
   
   const renderContent = () => {
-      if (loading) {
-          return (<div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-xl font-semibold text-gray-700">Loading...</div></div>);
-      }
-      if (user) {
-          return <Dashboard user={user} onSignOut={handleSignOut} />;
-      }
+      if (loading) { return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>); }
+      if (user) { return <Dashboard user={user} onSignOut={handleSignOut} />; }
       switch(view) {
           case 'signin': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><SignIn setView={setView} onLoginSuccess={handleLoginSuccess} /></div>;
           case 'forgot-password': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><ForgotPassword setView={setView} /></div>;
