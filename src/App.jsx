@@ -138,7 +138,8 @@ const SignIn = ({ setView, onLoginSuccess }) => {
       const userProfile = await getUserProfile(userCredential.user.uid);
       onLoginSuccess(userProfile);
     } catch (err) {
-      setError("Failed to sign in. Please check your email and password.");
+      console.error("Sign-in error:", err);
+      setError(err.message);
     }
   };
 
@@ -161,7 +162,8 @@ const SignIn = ({ setView, onLoginSuccess }) => {
         }
         onLoginSuccess(userProfile);
     } catch (err) {
-        setError("Failed to sign in with Google.");
+        console.error("Google sign-in error:", err);
+        setError(err.message);
     }
   };
 
