@@ -638,8 +638,9 @@ const ShopManagement = ({ currentUser }) => {
         </div>
     );
 };
-const StockManagement = () => {
+const StockManagement = ({ onViewImport }) => {
     const [stock, setStock] = useState([]);
+    const [shops, setShops] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -648,25 +649,29 @@ const StockManagement = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // New state for serial number modal
     const [isSerialsModalOpen, setIsSerialsModalOpen] = useState(false);
-    const [serialsData, setSerialsData] = useState({ itemName: '', serials: [] });
+    const [serialsData, setSerialsData] = useState({ stockItemId: '', itemName: '', serials: [] });
     const [serialsLoading, setSerialsLoading] = useState(false);
 
     const openAddModal = () => { setIsEditing(false); setFormData({ qty: 0 }); setIsModalOpen(true); };
     const openEditModal = (item) => { setIsEditing(true); setFormData(item); setIsModalOpen(true); };
 
-    const fetchStock = useCallback(async () => {
+    const fetchStockAndShops = useCallback(async () => {
         setLoading(true);
         try {
-            const querySnapshot = await getDocs(collection(db, 'import_stock'));
-            const stockList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const [stockSnap, shopsSnap] = await Promise.all([
+                getDocs(collection(db, 'import_stock')),
+                getDocs(collection(db, 'shops'))
+            ]);
+            const stockList = stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const shopsList = shopsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setStock(stockList);
-        } catch (err) { setError("Failed to fetch stock items."); }
+            setShops(shopsList);
+        } catch (err) { setError("Failed to fetch data."); console.error(err); }
         finally { setLoading(false); }
     }, []);
 
-    useEffect(() => { fetchStock(); }, [fetchStock]);
+    useEffect(() => { fetchStockAndShops(); }, [fetchStockAndShops]);
 
     const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -708,7 +713,6 @@ const StockManagement = () => {
                 await updateDoc(doc(db, 'import_stock', dataToSave.id), dataToSave);
                 setStock(prev => prev.map(item => item.id === dataToSave.id ? dataToSave : item));
             } else {
-                // Ensure new items start with 0 quantity, to be updated by imports
                 dataToSave.qty = 0;
                 const newDocRef = await addDoc(collection(db, 'import_stock'), dataToSave);
                 setStock(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
@@ -735,17 +739,34 @@ const StockManagement = () => {
     const viewSerials = async (item) => {
         setSerialsLoading(true);
         setIsSerialsModalOpen(true);
-        setSerialsData({ itemName: item.name, serials: [] });
+        setSerialsData({ stockItemId: item.id, itemName: item.name, serials: [] });
         try {
             const serialsColRef = collection(db, 'import_stock', item.id, 'serials');
             const querySnapshot = await getDocs(serialsColRef);
             const serialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setSerialsData({ itemName: item.name, serials: serialsList });
+            setSerialsData({ stockItemId: item.id, itemName: item.name, serials: serialsList });
         } catch (err) {
             console.error("Failed to fetch serial numbers:", err);
             setError("Could not fetch serial numbers for this item.");
         } finally {
             setSerialsLoading(false);
+        }
+    };
+
+    // New function to handle assigning a serial to a shop
+    const handleAssignShop = async (serialId, newShopId) => {
+        const { stockItemId } = serialsData;
+        try {
+            const serialDocRef = doc(db, 'import_stock', stockItemId, 'serials', serialId);
+            await updateDoc(serialDocRef, { assignedShopId: newShopId });
+            // Update local state for immediate UI feedback
+            setSerialsData(prev => ({
+                ...prev,
+                serials: prev.serials.map(s => s.id === serialId ? { ...s, assignedShopId: newShopId } : s)
+            }));
+        } catch (err) {
+            console.error("Failed to assign shop:", err);
+            setError("Error updating shop assignment.");
         }
     };
 
@@ -759,19 +780,44 @@ const StockManagement = () => {
 
     return (
         <div className="p-4 sm:p-8">
-             <Modal isOpen={isSerialsModalOpen} onClose={() => setIsSerialsModalOpen(false)} size="lg">
+             <Modal isOpen={isSerialsModalOpen} onClose={() => setIsSerialsModalOpen(false)} size="4xl">
                 <h3 className="text-xl font-bold mb-4">Serial Numbers for {serialsData.itemName}</h3>
                 {serialsLoading ? <p>Loading serials...</p> : (
-                    <div className="max-h-96 overflow-y-auto">
+                    <div className="max-h-[60vh] overflow-y-auto">
                         {serialsData.serials.length > 0 ? (
-                            <ul className="divide-y divide-gray-200">
-                                {serialsData.serials.map(serial => (
-                                    <li key={serial.id} className="py-3 flex justify-between items-center">
-                                        <span className="font-mono text-gray-700">{serial.id}</span>
-                                        <span className="font-semibold text-gray-800">LKR {serial.finalCostLKR?.toFixed(2)}</span>
-                                    </li>
-                                ))}
-                            </ul>
+                            <table className="min-w-full">
+                                <thead className="bg-gray-100 sticky top-0"><tr>
+                                    <th className="px-4 py-2 text-left">Serial Number</th>
+                                    <th className="px-4 py-2 text-left">Invoice #</th>
+                                    <th className="px-4 py-2 text-left">Received Date</th>
+                                    <th className="px-4 py-2 text-left">Unit Price (LKR)</th>
+                                    <th className="px-4 py-2 text-left">Assigned Shop</th>
+                                </tr></thead>
+                                <tbody>
+                                    {serialsData.serials.map(serial => (
+                                        <tr key={serial.id} className="border-b">
+                                            <td className="px-4 py-2 font-mono">{serial.id}</td>
+                                            <td className="px-4 py-2">
+                                                <button onClick={() => { onViewImport(serial.importInvoiceNo); setIsSerialsModalOpen(false); }} className="text-blue-600 hover:underline">
+                                                    {serial.importInvoiceNo}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-2">{serial.purchaseDate?.toDate().toLocaleDateString()}</td>
+                                            <td className="px-4 py-2">{serial.finalCostLKR?.toFixed(2)}</td>
+                                            <td className="px-4 py-2">
+                                                <select
+                                                    value={serial.assignedShopId || ''}
+                                                    onChange={(e) => handleAssignShop(serial.id, e.target.value)}
+                                                    className="w-full p-2 border rounded bg-white"
+                                                >
+                                                    <option value="">-- Unassigned --</option>
+                                                    {shops.map(shop => <option key={shop.id} value={shop.id}>{shop.name}</option>)}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         ) : <p>No serial numbers found for this item.</p>}
                     </div>
                 )}
@@ -932,7 +978,7 @@ const SupplierManagement = () => {
         </div>
     );
 };
-const ImportManagementPortal = ({ currentUser }) => {
+const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView }) => {
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [imports, setImports] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
@@ -974,6 +1020,17 @@ const ImportManagementPortal = ({ currentUser }) => {
     }, []);
 
     useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
+    
+    // Effect to handle viewing an import triggered from another component
+    useEffect(() => {
+        if (importToView) {
+            const importData = imports.find(imp => imp.id === importToView);
+            if (importData) {
+                handleViewImport(importData);
+                onClearImportToView(); // Clear the trigger
+            }
+        }
+    }, [importToView, imports, onClearImportToView]);
 
     const handleCreateNew = async () => {
         setIsReadOnly(false);
@@ -1020,7 +1077,25 @@ const ImportManagementPortal = ({ currentUser }) => {
             unitPriceUSD: parseFloat(formSelections.selectedUnitPrice)
         };
         setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
-        setFormSelections({ selectedStockId: '', selectedQty: 1, selectedUOM: '', selectedUnitPrice: 0 }); // Reset
+        setFormSelections({ selectedStockId: '', selectedQty: 1, selectedUOM: '', selectedUnitPrice: 0 });
+    };
+    
+    const handleRemoveItem = (indexToRemove) => {
+        setFormData(prev => ({
+            ...prev,
+            items: prev.items.filter((_, index) => index !== indexToRemove)
+        }));
+    };
+
+    const handleEditItem = (indexToEdit) => {
+        const item = formData.items[indexToEdit];
+        setFormSelections({
+            selectedStockId: item.stockItemId,
+            selectedQty: item.qty,
+            selectedUnitPrice: item.unitPriceUSD,
+            selectedUOM: item.uom,
+        });
+        handleRemoveItem(indexToEdit);
     };
 
     const handleCalculate = () => {
@@ -1093,7 +1168,8 @@ const ImportManagementPortal = ({ currentUser }) => {
                     batch.set(serialDocRef, {
                         importInvoiceNo: formData.invoiceNo,
                         purchaseDate: Timestamp.now(),
-                        finalCostLKR: item.finalUnitPriceLKR
+                        finalCostLKR: item.finalUnitPriceLKR,
+                        assignedShopId: '', // Initialize as unassigned
                     });
                 }
             }
@@ -1105,6 +1181,38 @@ const ImportManagementPortal = ({ currentUser }) => {
         } catch (err) {
             console.error("Save error:", err);
             setError("Failed to save import. Check console for details.");
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    const handleDeleteImport = async (importToDelete) => {
+        if (!window.confirm(`Are you sure you want to delete import #${importToDelete.id}? This will reverse stock quantities and delete all associated serial numbers.`)) return;
+        setLoading(true);
+        try {
+            const batch = writeBatch(db);
+            const importDocRef = doc(db, 'imports', importToDelete.id);
+
+            for (const item of importToDelete.items) {
+                const stockDocRef = doc(db, 'import_stock', item.stockItemId);
+                const stockDocSnap = await getDoc(stockDocRef);
+                if (stockDocSnap.exists()) {
+                    const currentQty = stockDocSnap.data().qty || 0;
+                    batch.update(stockDocRef, { qty: Math.max(0, currentQty - item.qty) });
+                }
+
+                for (const serialNo of item.serials) {
+                    const serialDocRef = doc(db, 'import_stock', item.stockItemId, 'serials', serialNo);
+                    batch.delete(serialDocRef);
+                }
+            }
+
+            batch.delete(importDocRef);
+            await batch.commit();
+            await fetchInitialData();
+        } catch (err) {
+            console.error("Delete error:", err);
+            setError("Failed to delete import. Check console for details.");
         } finally {
             setLoading(false);
         }
@@ -1143,7 +1251,7 @@ const ImportManagementPortal = ({ currentUser }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-md">
                     <div><label>Import Invoice No.</label><input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/></div>
                     <div><label>Supplier</label><select name="supplierId" value={formData.supplierId} onChange={handleInputChange} className="w-full p-2 border rounded bg-white" disabled={isCalculated}><option value="">Select Supplier</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}</select></div>
-                    <div><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="exchangeRate" value={formData.exchangeRate} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/><p className="text-xs text-gray-500">Fetched for: {formData.exchangeRateDate}</p></div>
+                    <div><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="exchangeRate" value={formData.exchangeRate} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/><p className="text-xs text-gray-500">Date: {formData.createdAt?.toDate().toLocaleDateString() || formData.exchangeRateDate}</p></div>
                 </div>
 
                 {/* --- ITEM ENTRY --- */}
@@ -1165,18 +1273,17 @@ const ImportManagementPortal = ({ currentUser }) => {
                 {/* --- ITEMS TABLE --- */}
                 <div className="overflow-x-auto mb-6">
                     <table className="min-w-full">
-                        <thead><tr className="bg-gray-100"><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-left">Qty</th><th className="px-4 py-2 text-left">Unit Price (USD)</th><th className="px-4 py-2 text-left">Total (USD)</th><th className="px-4 py-2 text-left">Final Unit Price (LKR)</th><th className="px-4 py-2 text-left">Serials</th></tr></thead>
+                        <thead><tr className="bg-gray-100"><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-left">Qty</th><th className="px-4 py-2 text-left">Unit Price (USD)</th><th className="px-4 py-2 text-left">Total (USD)</th><th className="px-4 py-2 text-left">Final Unit Price (LKR)</th>{!isReadOnly && !isCalculated && <th className="px-4 py-2 text-center">Actions</th>}</tr></thead>
                         <tbody>{formData.items.map((item, index) => (<tr key={index} className="border-b">
                             <td className="px-4 py-2">{item.name}</td><td className="px-4 py-2">{item.qty}</td><td className="px-4 py-2">{item.unitPriceUSD.toFixed(2)}</td>
                             <td className="px-4 py-2">{(item.unitPriceUSD * item.qty).toFixed(2)}</td>
                             <td className="px-4 py-2 font-semibold">{item.finalUnitPriceLKR ? item.finalUnitPriceLKR.toFixed(2) : 'N/A'}</td>
-                             <td className="px-4 py-2">
-                                {isReadOnly && item.serials?.length > 0 ? (
-                                     <select className="w-full p-1 border rounded bg-white text-sm"><option>{item.serials.length} serials</option>{item.serials.map(s => <option key={s} disabled>{s}</option>)}</select>
-                                ) : (
-                                    <span className="text-sm text-gray-500">{item.qty} serials will be generated</span>
-                                )}
-                             </td>
+                            {!isReadOnly && !isCalculated && <td className="px-4 py-2 text-center">
+                                <div className="flex justify-center space-x-2">
+                                    <button onClick={() => handleEditItem(index)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                    <button onClick={() => handleRemoveItem(index)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                </div>
+                            </td>}
                         </tr>))}</tbody>
                     </table>
                 </div>
@@ -1210,9 +1317,14 @@ const ImportManagementPortal = ({ currentUser }) => {
                                     <td className="px-5 py-4 font-semibold">{imp.id}</td>
                                     <td className="px-5 py-4">{supplier?.companyName || 'N/A'}</td>
                                     <td className="px-5 py-4 text-sm">{imp.createdAt?.toDate().toLocaleDateString()}</td>
-                                    <td className="px-5 py-4 text-sm">{imp.items.length}</td>
+                                    <td className="px-5 py-4 text-sm">{imp.items.reduce((acc, item) => acc + item.qty, 0)}</td>
                                     <td className="px-5 py-4 text-center">
-                                        <button onClick={() => handleViewImport(imp)} className="text-blue-600 hover:text-blue-900 text-sm">View</button>
+                                        <div className="flex justify-center space-x-3">
+                                            <button onClick={() => handleViewImport(imp)} className="text-blue-600 hover:text-blue-900 text-sm">View</button>
+                                            {currentUser.role === 'super_admin' && (
+                                                <button onClick={() => handleDeleteImport(imp)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );
@@ -1274,6 +1386,9 @@ const Dashboard = ({ user, onSignOut }) => {
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
     const [importDropdownOpen, setImportDropdownOpen] = useState(false);
     const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+    
+    // State lifted up to manage cross-component view changes
+    const [importToView, setImportToView] = useState(null);
 
     const adminDropdownRef = useRef(null);
     const importDropdownRef = useRef(null);
@@ -1297,14 +1412,24 @@ const Dashboard = ({ user, onSignOut }) => {
         if (hasImportAccess) setCurrentView('import_stock_management');
         else if (hasExportAccess) setCurrentView('export_dashboard');
     }, [hasImportAccess, hasExportAccess]);
+    
+    // When importToView is set, switch to the import management view
+    useEffect(() => {
+        if (importToView) {
+            setCurrentView('import_management');
+        }
+    }, [importToView]);
 
+    const handleViewImport = (invoiceId) => {
+        setImportToView(invoiceId);
+    };
 
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportPortal />;
-            case 'import_management': return <ImportManagementPortal currentUser={user} />;
+            case 'import_management': return <ImportManagementPortal currentUser={user} importToView={importToView} onClearImportToView={() => setImportToView(null)} />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
-            case 'import_stock_management': return <StockManagement />;
+            case 'import_stock_management': return <StockManagement onViewImport={handleViewImport} />;
             case 'import_shop_management': return <ShopManagement />;
             case 'import_supplier_management': return <SupplierManagement />;
             case 'export_dashboard': return <ExportPortal />;
