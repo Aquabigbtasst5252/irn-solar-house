@@ -87,7 +87,7 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
       <img
-        src="https://i.imgur.com/8f9e60a.png"
+        src="https://i.imgur.com/VtqESiF.png"
         alt="IRN Solar House Logo"
         className="h-24 w-auto mb-4"
       />
@@ -1249,9 +1249,9 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
 
                 {/* --- HEADER FIELDS --- */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-md">
-                    <div><label>Import Invoice No.</label><input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/></div>
-                    <div><label>Supplier</label><select name="supplierId" value={formData.supplierId} onChange={handleInputChange} className="w-full p-2 border rounded bg-white" disabled={isCalculated}><option value="">Select Supplier</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}</select></div>
-                    <div><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="exchangeRate" value={formData.exchangeRate} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/><p className="text-xs text-gray-500">Date: {formData.createdAt?.toDate().toLocaleDateString() || formData.exchangeRateDate}</p></div>
+                    <div><label>Import Invoice No.</label><input type="text" name="invoiceNo" value={formData.id || formData.invoiceNo} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated || isReadOnly}/></div>
+                    <div><label>Supplier</label><select name="supplierId" value={formData.supplierId} onChange={handleInputChange} className="w-full p-2 border rounded bg-white" disabled={isCalculated || isReadOnly}><option value="">Select Supplier</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}</select></div>
+                    <div><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="exchangeRate" value={formData.exchangeRate} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated || isReadOnly}/><p className="text-xs text-gray-500">Date: {formData.createdAt?.toDate().toLocaleDateString() || formData.exchangeRateDate}</p></div>
                 </div>
 
                 {/* --- ITEM ENTRY --- */}
@@ -1273,7 +1273,9 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
                 {/* --- ITEMS TABLE --- */}
                 <div className="overflow-x-auto mb-6">
                     <table className="min-w-full">
-                        <thead><tr className="bg-gray-100"><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-left">Qty</th><th className="px-4 py-2 text-left">Unit Price (USD)</th><th className="px-4 py-2 text-left">Total (USD)</th><th className="px-4 py-2 text-left">Final Unit Price (LKR)</th>{!isReadOnly && !isCalculated && <th className="px-4 py-2 text-center">Actions</th>}</tr></thead>
+                        <thead className="bg-gray-50">
+                            <tr className="bg-gray-100"><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-left">Qty</th><th className="px-4 py-2 text-left">Unit Price (USD)</th><th className="px-4 py-2 text-left">Total (USD)</th><th className="px-4 py-2 text-left">Final Unit Price (LKR)</th>{!isReadOnly && !isCalculated && <th className="px-4 py-2 text-center">Actions</th>}</tr>
+                        </thead>
                         <tbody>{formData.items.map((item, index) => (<tr key={index} className="border-b">
                             <td className="px-4 py-2">{item.name}</td><td className="px-4 py-2">{item.qty}</td><td className="px-4 py-2">{item.unitPriceUSD.toFixed(2)}</td>
                             <td className="px-4 py-2">{(item.unitPriceUSD * item.qty).toFixed(2)}</td>
@@ -1308,7 +1310,7 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by Invoice # or Supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
                 <div className="overflow-x-auto"><table className="min-w-full">
-                    <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Invoice #</th><th className="px-5 py-3 text-left">Supplier</th><th className="px-5 py-3 text-left">Date</th><th className="px-5 py-3 text-left">Items</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                    <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Invoice #</th><th className="px-5 py-3 text-left">Supplier</th><th className="px-5 py-3 text-left">Date</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                     <tbody>
                         {filteredImports.map(imp => {
                             const supplier = suppliers.find(s => s.id === imp.supplierId);
@@ -1343,7 +1345,7 @@ const HomePage = ({ onSignInClick }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
+                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
                     </div>
                     <div className="hidden md:flex items-center space-x-6"><a href="#products" className="hover:text-yellow-600">Products</a><a href="#services" className="hover:text-yellow-600">Services</a><a href="#about" className="hover:text-yellow-600">About Us</a><a href="#contact" className="hover:text-yellow-600">Contact</a></div>
@@ -1439,7 +1441,7 @@ const Dashboard = ({ user, onSignOut }) => {
         }
     };
 
-    if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
+    if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
 
     const NavLink = ({ view, children }) => {
         const isActive = currentView === view;
@@ -1452,7 +1454,7 @@ const Dashboard = ({ user, onSignOut }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-6">
                     <div className="flex justify-between items-center py-4">
-                        <div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
+                        <div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
                         <div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
