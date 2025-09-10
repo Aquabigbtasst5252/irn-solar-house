@@ -86,7 +86,7 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
       <img 
-        src="https://i.imgur.com/8f9e60a.png" 
+        src="https://i.imgur.com/Rrg91Ch.png" 
         alt="IRN Solar House Logo" 
         className="h-24 w-auto mb-4" 
       />
@@ -401,7 +401,7 @@ const Dashboard = ({ user, onSignOut }) => {
             <header className="bg-white shadow-md">
                 <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
+                         <img src="https://i.imgur.com/Rrg91Ch.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span>
                     </div>
                     <div className="flex items-center">
