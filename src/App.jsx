@@ -86,7 +86,7 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
       <img 
-        src="https://imgur.com/a/Rrg91Ch" 
+        src="https://i.imgur.com/8f9e60a.png" 
         alt="IRN Solar House Logo" 
         className="h-24 w-auto mb-4" 
       />
@@ -346,14 +346,14 @@ const HomePage = ({ onSignInClick }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://imgur.com/a/Rrg91Ch" alt="Logo" className="h-12 w-auto"/>
+                         <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
                     </div>
                     <div className="hidden md:flex items-center space-x-6"><a href="#products" className="hover:text-yellow-600">Products</a><a href="#services" className="hover:text-yellow-600">Services</a><a href="#about" className="hover:text-yellow-600">About Us</a><a href="#contact" className="hover:text-yellow-600">Contact</a></div>
                     <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full transition duration-300">Staff Sign In</button>
                 </nav>
             </header>
-            <section className="relative h-[60vh] md:h-[80vh] bg-cover bg-center text-white" style={{backgroundImage: "url('https://images.unsplash.com/photo-1508515053969-7b95b8855e14?q=80&w=2070&auto=format&fit=crop')"}}>
+            <section className="relative h-[60vh] md:h-[80vh] bg-cover bg-center text-white" style={{backgroundImage: "url('https://images.unsplash.com/photo-1508515053969-7b95b8855e14?q=80&w=2070&auto.format&fit=crop')"}}>
                 <div className="absolute inset-0 bg-black bg-opacity-50"></div>
                 <div className="relative container mx-auto px-6 h-full flex flex-col justify-center items-start"><h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4 max-w-2xl">Powering Sri Lanka's Future with Sustainable Energy</h1><p className="text-lg md:text-xl mb-8 max-w-xl">Harness the power of the sun with IRN Solar House, your trusted partner for high-quality solar solutions.</p><a href="#contact" className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 px-8 rounded-full transition duration-300 text-lg">Get a Free Quote</a></div>
             </section>
@@ -369,9 +369,9 @@ const HomePage = ({ onSignInClick }) => {
             <section id="products" className="py-20">
                 <div className="container mx-auto px-6"><h2 className="text-3xl font-bold text-center mb-12">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto=format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div></div>
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto=format&fit=crop" alt="Solar Inverters" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Inverters</h3><p className="text-gray-700">Reliable on-grid, off-grid, and hybrid inverters to convert solar energy into usable power for your home or business.</p></div></div>
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto=format&fit=crop" alt="Solar Batteries" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Battery Storage</h3><p className="text-gray-700">Store excess solar energy with our advanced battery solutions and ensure power during outages.</p></div></div>
+                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div></div>
+                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Inverters" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Inverters</h3><p className="text-gray-700">Reliable on-grid, off-grid, and hybrid inverters to convert solar energy into usable power for your home or business.</p></div></div>
+                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Batteries" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Battery Storage</h3><p className="text-gray-700">Store excess solar energy with our advanced battery solutions and ensure power during outages.</p></div></div>
                     </div>
                 </div>
             </section>
@@ -401,7 +401,7 @@ const Dashboard = ({ user, onSignOut }) => {
             <header className="bg-white shadow-md">
                 <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://imgur.com/a/Rrg91Ch" alt="Logo" className="h-12 w-auto"/>
+                         <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span>
                     </div>
                     <div className="flex items-center">
