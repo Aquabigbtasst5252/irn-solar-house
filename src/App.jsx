@@ -23,7 +23,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
-const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6318","measurementId":"G-G6M6DPNERN"}`;
+const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
 
 let firebaseApp;
 let auth;
@@ -38,7 +38,7 @@ try {
   console.error("Error initializing Firebase:", error);
 }
 
-// --- Helper Functions ---
+// --- Helper Functions & Data ---
 const getUserProfile = async (uid) => {
   if (!db) return null;
   const userDocRef = doc(db, 'users', uid);
@@ -49,6 +49,8 @@ const getUserProfile = async (uid) => {
   return null;
 };
 
+const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+
 // --- ICON COMPONENTS ---
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
@@ -57,6 +59,7 @@ const ChevronDownIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/sv
 const PencilIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>;
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const PlusCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>;
 
 // --- Reusable Components ---
 const Modal = ({ isOpen, onClose, children }) => {
@@ -64,13 +67,13 @@ const Modal = ({ isOpen, onClose, children }) => {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
-            <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800">&times;</button>
+            <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
             {children}
         </div>
       </div>
     );
 };
-
+// ... (Auth Components are unchanged and omitted for brevity)
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
@@ -114,7 +117,6 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   </div>
 );
 
-// --- Authentication Components ---
 const SignIn = ({ setView, onLoginSuccess }) => {
   const [error, setError] = useState('');
 
@@ -204,8 +206,8 @@ const ForgotPassword = ({ setView }) => {
     );
 };
 
+
 // --- Portal Components ---
-// ... (UserManagementPortal remains the same, so it's omitted for brevity but is still in the file)
 const UserManagementPortal = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -328,10 +330,49 @@ const CustomerManagement = ({ portalType }) => {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [currentCustomer, setCurrentCustomer] = useState(null);
+    const [formData, setFormData] = useState({});
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const openMapSelector = () => {
+        const mapWindow = window.open("", "mapSelector", "width=800,height=600,resizable=yes,scrollbars=yes");
+        const mapHtml = `
+            <!DOCTYPE html><html><head><title>Select Location</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /><style>body, html { margin: 0; padding: 0; height: 100%; } #map { height: 100%; }</style></head>
+            <body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <script>
+                const map = L.map('map').setView([7.9, 80.7], 8);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+                let marker;
+                map.on('click', function(e) {
+                    const { lat, lng } = e.latlng;
+                    if(marker) { marker.setLatLng(e.latlng); } else { marker = L.marker(e.latlng).addTo(map); }
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'mapCoords', lat: lat.toFixed(6), lng: lng.toFixed(6) }, "*");
+                    }
+                });
+            </script></body></html>`;
+        mapWindow.document.write(mapHtml);
+        mapWindow.document.close();
+    };
+
+    useEffect(() => {
+        const handleMapMessage = (event) => {
+            if (event.data.type === 'mapCoords') {
+                setFormData(prev => ({ ...prev, latitude: event.data.lat, longitude: event.data.lng }));
+            }
+        };
+        window.addEventListener('message', handleMapMessage);
+        return () => window.removeEventListener('message', handleMapMessage);
+    }, []);
+
 
     const fetchCustomers = useCallback(async () => {
         setLoading(true);
@@ -347,33 +388,31 @@ const CustomerManagement = ({ portalType }) => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const customerData = Object.fromEntries(formData.entries());
-        
         try {
             if (isEditing) {
-                const docRef = doc(db, collectionName, currentCustomer.id);
-                await updateDoc(docRef, customerData);
+                const docRef = doc(db, collectionName, formData.id);
+                await updateDoc(docRef, formData);
             } else {
-                customerData.registerDate = Timestamp.now();
-                await addDoc(collection(db, collectionName), customerData);
+                const dataToSave = { ...formData, registerDate: Timestamp.now() };
+                await addDoc(collection(db, collectionName), dataToSave);
             }
             fetchCustomers();
             setIsModalOpen(false);
         } catch (err) {
             setError('Failed to save customer data.');
+            console.error(err);
         }
     };
     
     const openAddModal = () => {
         setIsEditing(false);
-        setCurrentCustomer(null);
+        setFormData({ country: isImport ? 'Sri Lanka' : '' });
         setIsModalOpen(true);
     };
 
     const openEditModal = (customer) => {
         setIsEditing(true);
-        setCurrentCustomer(customer);
+        setFormData(customer);
         setIsModalOpen(true);
     };
 
@@ -386,19 +425,11 @@ const CustomerManagement = ({ portalType }) => {
         }
     };
 
-    const commonFields = [
-        { name: 'name', label: 'Name', type: 'text', required: true },
-        { name: 'address', label: 'Address', type: 'textarea', required: true },
-        { name: 'email', label: 'Email', type: 'email', required: true },
-        { name: 'telephone', label: 'Telephone', type: 'tel', required: true },
-        { name: 'latitude', label: 'Location (Latitude)', type: 'number', required: false },
-        { name: 'longitude', label: 'Location (Longitude)', type: 'number', required: false },
-    ];
-    const exportOnlyFields = [
-        { name: 'country', label: 'Country', type: 'text', required: true },
-        { name: 'companyName', label: 'Company Name (optional)', type: 'text', required: false },
-    ];
-    const formFields = isImport ? commonFields : [...commonFields, ...exportOnlyFields];
+    const filteredCustomers = customers.filter(c =>
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.telephone?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if (loading) return <div className="text-center p-10">Loading Customers...</div>;
     if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
@@ -408,11 +439,19 @@ const CustomerManagement = ({ portalType }) => {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Customer' : 'Add New Customer'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    {formFields.map(field => field.type === 'textarea' ?
-                        <div key={field.name}><label className="block text-sm font-medium text-gray-700">{field.label}</label><textarea name={field.name} required={field.required} defaultValue={currentCustomer?.[field.name] || ''} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea></div> :
-                        <div key={field.name}><label className="block text-sm font-medium text-gray-700">{field.label}</label><input type={field.type} name={field.name} step="any" required={field.required} defaultValue={currentCustomer?.[field.name] || ''} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                    )}
-                     <div className="text-xs text-gray-500">Find coordinates using <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" className="text-blue-600">Google Maps</a> (Right-click on map &rarr; click coordinates to copy).</div>
+                    <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    {!isImport && (<>
+                        <div><label className="block text-sm font-medium text-gray-700">Company Name (optional)</label><input type="text" name="companyName" value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div><label className="block text-sm font-medium text-gray-700">Country</label><select name="country" required value={formData.country || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"><option value="">Select a country</option>{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </>)}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Latitude</label><input type="number" step="any" name="latitude" value={formData.latitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Longitude</label><input type="number" step="any" name="longitude" value={formData.longitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-1"><button type="button" onClick={openMapSelector} className="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Select on Map</button></div>
+                    </div>
                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Customer'}</button></div>
                 </form>
             </Modal>
@@ -423,15 +462,17 @@ const CustomerManagement = ({ portalType }) => {
             </div>
             
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b"><input type="text" placeholder="Search by name, email, or phone..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full leading-normal">
-                         <thead><tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm"><th className="px-5 py-3">Name</th><th className="px-5 py-3">Contact</th>{!isImport && <th className="px-5 py-3">Country</th>}<th className="px-5 py-3">Registered</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                         <thead><tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm"><th className="px-5 py-3">Name</th><th className="px-5 py-3">Contact</th>{!isImport && <th className="px-5 py-3">Country</th>}<th className="px-5 py-3">Location</th><th className="px-5 py-3">Registered</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                         <tbody>
-                            {customers.map(customer => (
+                            {filteredCustomers.map(customer => (
                                 <tr key={customer.id} className="border-b hover:bg-gray-50">
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.name}</p>{!isImport && customer.companyName && <p className="text-gray-600 text-xs whitespace-no-wrap">{customer.companyName}</p>}</td>
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.email}</p><p className="text-gray-600 whitespace-no-wrap">{customer.telephone}</p></td>
                                     {!isImport && <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.country}</p></td>}
+                                    <td className="px-5 py-4 text-sm bg-white">{customer.latitude && customer.longitude ? (<a href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center"><MapPinIcon /> View</a>) : ('N/A')}</td>
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.registerDate?.toDate().toLocaleDateString()}</p></td>
                                     <td className="px-5 py-4 text-sm bg-white text-center">
                                         <div className="flex items-center justify-center space-x-3">
@@ -449,10 +490,10 @@ const CustomerManagement = ({ portalType }) => {
     );
 };
 
+// ... (Other components are unchanged and omitted for brevity)
 const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for stock management, invoicing, and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
 
-// --- Public Homepage Component ---
 const HomePage = ({ onSignInClick }) => {
     return (
         <div className="bg-white text-gray-800">
@@ -496,7 +537,6 @@ const HomePage = ({ onSignInClick }) => {
     );
 };
 
-// --- Main App & Dashboard Structure ---
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('import_dashboard');
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
