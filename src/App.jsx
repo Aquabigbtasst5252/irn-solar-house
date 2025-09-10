@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   onAuthStateChanged, 
-  createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
   sendPasswordResetEmail,
@@ -18,8 +17,7 @@ import {
   collection,
   getDocs,
   updateDoc,
-  deleteDoc,
-  addDoc
+  deleteDoc
 } from 'firebase/firestore';
 
 // --- Firebase Configuration ---
@@ -53,6 +51,7 @@ const getUserProfile = async (uid) => {
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
 const ShieldCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286zm0 13.036h.008v.008h-.008v-.008z" /></svg>;
+const ChevronDownIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
 
 // --- Reusable Components ---
 const Modal = ({ isOpen, onClose, onConfirm, title, children, confirmText = "Confirm" }) => {
@@ -86,7 +85,7 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
       <img 
-        src="https://i.imgur.com/Rrg91Ch.png" 
+        src="https://i.imgur.com/8f9e60a.png" 
         alt="IRN Solar House Logo" 
         className="h-24 w-auto mb-4" 
       />
@@ -236,7 +235,7 @@ const ForgotPassword = ({ setView }) => {
 };
 
 // --- Portal Components ---
-const SuperAdminDashboard = ({ currentUser }) => {
+const UserManagementPortal = ({ currentUser }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -299,7 +298,7 @@ const SuperAdminDashboard = ({ currentUser }) => {
                 Are you sure you want to delete the user record for {userToDelete?.email}? This action only removes their data record.
             </Modal>
             
-            <h2 className="text-3xl font-bold mb-6 text-gray-800">Super Admin Portal</h2>
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">User Management</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-sm font-medium text-gray-500">Total Users</p><p className="text-3xl font-bold text-gray-800">{userStats.total}</p></div>
@@ -322,10 +321,14 @@ const SuperAdminDashboard = ({ currentUser }) => {
                                     <td className="px-5 py-4 text-sm bg-white text-center">
                                         {user.id !== currentUser.uid ? (
                                             <div className="flex items-center justify-center space-x-2">
-                                                <select value={user.role} onChange={(e) => handleRoleChange(user.id, e.target.value)} className="w-48 bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none">
-                                                    <option value="pending">pending</option><option value="super_admin">super_admin</option><option value="admin">admin</option><option value="shop_worker_import">shop_worker_import</option><option value="shop_worker_export">shop_worker_export</option>
+                                                <select value={user.role} onChange={(e) => handleRoleChange(user.id, e.target.value)} className="w-48 bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none" disabled={currentUser.role !== 'super_admin' && user.role === 'super_admin'}>
+                                                    <option value="pending">pending</option>
+                                                    {currentUser.role === 'super_admin' && <option value="super_admin">super_admin</option>}
+                                                    <option value="admin">admin</option>
+                                                    <option value="shop_worker_import">shop_worker_import</option>
+                                                    <option value="shop_worker_export">shop_worker_export</option>
                                                 </select>
-                                                <button onClick={() => setUserToDelete(user)} className="text-red-600 hover:text-red-900"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                                {currentUser.role === 'super_admin' && <button onClick={() => setUserToDelete(user)} className="text-red-600 hover:text-red-900"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
                                             </div>
                                         ) : (<span className="text-xs text-gray-500">Cannot edit self</span>)}
                                     </td>
@@ -338,6 +341,9 @@ const SuperAdminDashboard = ({ currentUser }) => {
         </div>
     );
 };
+
+const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for stock management, invoicing, costing, and customer registration for the solar import business will be built here.</p></div>;
+const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
 
 // --- Public Homepage Component ---
 const HomePage = ({ onSignInClick }) => {
@@ -385,32 +391,88 @@ const HomePage = ({ onSignInClick }) => {
 
 // --- Main App & Dashboard Structure ---
 const Dashboard = ({ user, onSignOut }) => {
-    const renderDashboardContent = () => {
-        const placeholder = (title) => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">{title}</h2><p className="mt-4 text-gray-600">This module is under construction.</p></div>;
-        switch (user.role) {
-            case 'super_admin': return <SuperAdminDashboard currentUser={user} />;
-            case 'admin': return placeholder("Admin Dashboard");
-            case 'shop_worker_import': return placeholder("Stock Management (Import)");
-            case 'shop_worker_export': return placeholder("Spices Management (Export)");
+    const [currentView, setCurrentView] = useState('import');
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const hasImportAccess = ['super_admin', 'admin', 'shop_worker_import'].includes(user.role);
+    const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
+    const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
+    
+    // Set initial view based on role
+    useEffect(() => {
+        if (hasImportAccess) setCurrentView('import');
+        else if (hasExportAccess) setCurrentView('export');
+    }, [hasImportAccess, hasExportAccess]);
+
+
+    const renderContent = () => {
+        switch (currentView) {
+            case 'import': return <ImportPortal />;
+            case 'export': return <ExportPortal />;
+            case 'user_management': return <UserManagementPortal currentUser={user} />;
             default:
                 return (<div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div>);
         }
     };
+    
+    if (user.role === 'pending') {
+         return (
+             <div className="min-h-screen bg-gray-50 flex flex-col">
+                <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header>
+                <main className="flex-grow flex items-center justify-center">
+                    <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div>
+                </main>
+             </div>
+         );
+    }
+
     return (
         <div className="w-full min-h-screen bg-gray-50">
-            <header className="bg-white shadow-md">
-                <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center">
-                         <img src="https://i.imgur.com/Rrg91Ch.png" alt="Logo" className="h-12 w-auto"/>
-                         <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span>
+            <header className="bg-white shadow-md sticky top-0 z-40">
+                <div className="container mx-auto px-6">
+                    <div className="flex justify-between items-center py-4">
+                        <div className="flex items-center">
+                             <img src="https://i.imgur.com/8f9e60a.png" alt="Logo" className="h-12 w-auto"/>
+                             <span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span>
+                        </div>
+                        <div className="flex items-center">
+                            <span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span>
+                            <button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300">Sign Out</button>
+                        </div>
                     </div>
-                    <div className="flex items-center">
-                        <span className="text-gray-700 mr-4">Welcome, {user.displayName || user.email} ({user.role})</span>
-                        <button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300">Sign Out</button>
-                    </div>
-                </nav>
+                    <nav className="flex items-center space-x-2 border-t">
+                        {hasImportAccess && <button onClick={() => setCurrentView('import')} className={`py-3 px-4 text-sm font-medium ${currentView === 'import' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import</button>}
+                        {hasExportAccess && <button onClick={() => setCurrentView('export')} className={`py-3 px-4 text-sm font-medium ${currentView === 'export' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export</button>}
+                        {hasAdminAccess && (
+                            <div className="relative" ref={dropdownRef}>
+                                <button onClick={() => setDropdownOpen(!dropdownOpen)} className="py-3 px-4 text-sm font-medium flex items-center text-gray-600 hover:text-blue-600">
+                                    Admin Tools <ChevronDownIcon />
+                                </button>
+                                {dropdownOpen && (
+                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                                        <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView('user_management'); setDropdownOpen(false); }} className={`block px-4 py-2 text-sm ${currentView === 'user_management' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>
+                                            User Management
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </nav>
+                </div>
             </header>
-            <main className="container mx-auto mt-8 px-6">{renderDashboardContent()}</main>
+            <main className="container mx-auto mt-8 px-6">{renderContent()}</main>
         </div>
     );
 };
@@ -426,7 +488,6 @@ export default function App() {
       if (authUser) {
         const userProfile = await getUserProfile(authUser.uid);
         setUser({ ...authUser, ...userProfile });
-        setView('dashboard');
       } else {
         setUser(null);
         setView('homepage');
@@ -442,7 +503,6 @@ export default function App() {
   
   const handleLoginSuccess = (userProfile) => {
       setUser({ ...auth.currentUser, ...userProfile });
-      setView('dashboard');
   };
   
   const renderContent = () => {
