@@ -896,6 +896,7 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement />;
             case 'import_shop_management': return <ShopManagement />;
+            case 'import_supplier_management': return <SupplierManagement />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
@@ -921,7 +922,7 @@ const Dashboard = ({ user, onSignOut }) => {
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
                         {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
-                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink><NavLink view="import_shop_management">Shop Management</NavLink></div>}
+                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink><NavLink view="import_shop_management">Shop Management</NavLink><NavLink view="import_supplier_management">Supplier Management</NavLink></div>}
                         </div>)}
                         {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
                             {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
