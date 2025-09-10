@@ -19,7 +19,8 @@ import {
   updateDoc,
   deleteDoc,
   addDoc,
-  Timestamp
+  Timestamp,
+  writeBatch
 } from 'firebase/firestore';
 import {
     getStorage,
@@ -63,12 +64,20 @@ const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 const unitsOfMeasure = ["pieces (pcs)", "sets", "units", "meters (m)", "kilograms (kg)", "liters (L)"];
 
 // --- Reusable Components ---
-const Modal = ({ isOpen, onClose, children }) => {
+const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
     if (!isOpen) return null;
+    const sizeClasses = {
+        'md': 'max-w-md',
+        'lg': 'max-w-lg',
+        'xl': 'max-w-xl',
+        '2xl': 'max-w-2xl',
+        '4xl': 'max-w-4xl',
+        '6xl': 'max-w-6xl'
+    };
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl relative max-h-[90vh] overflow-y-auto">
-            <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+        <div className={`bg-white rounded-lg shadow-xl p-6 w-full ${sizeClasses[size]} relative max-h-[90vh] overflow-y-auto`}>
+            <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">×</button>
             {children}
         </div>
       </div>
@@ -170,7 +179,7 @@ const SignIn = ({ setView, onLoginSuccess }) => {
         <div className="relative my-4"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Or</span></div></div>
         <div><button type="button" onClick={handleGoogleSignIn} className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">Sign in with Google</button></div>
         <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('forgot-password')} className="font-medium text-blue-600 hover:text-blue-500">Forgot password?</a></div>
-        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('homepage')} className="font-medium text-gray-600 hover:text-gray-500">&larr; Back to Homepage</a></div>
+        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('homepage')} className="font-medium text-gray-600 hover:text-gray-500">← Back to Homepage</a></div>
     </AuthForm>
   );
 };
@@ -185,7 +194,7 @@ const ForgotPassword = ({ setView }) => {
       try {
         await sendPasswordResetEmail(auth, email.value);
         setMessage("Password reset email sent! Please check your inbox.");
-      } catch (err) {
+      } catch (err) => {
         setError("Failed to send reset email. Please check the address.");
       }
     };
@@ -345,7 +354,7 @@ const CustomerManagement = ({ portalType }) => {
             <body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <script>
                 const map = L.map('map').setView([7.9, 80.7], 8);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
                 let marker;
                 map.on('click', function(e) {
                     const { lat, lng } = e.latlng;
@@ -469,7 +478,7 @@ const CustomerManagement = ({ portalType }) => {
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.name}</p>{!isImport && customer.companyName && <p className="text-gray-600 text-xs whitespace-no-wrap">{customer.companyName}</p>}</td>
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.email}</p><p className="text-gray-600 whitespace-no-wrap">{customer.telephone}</p></td>
                                     {!isImport && <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.country}</p></td>}
-                                    <td className="px-5 py-4 text-sm bg-white">{customer.latitude && customer.longitude ? (<a href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center"><MapPinIcon /> View</a>) : ('N/A')}</td>
+                                    <td className="px-5 py-4 text-sm bg-white">{customer.latitude && customer.longitude ? (<a href={`https://www.google.com/maps/search/?api=1&query=${customer.latitude},${customer.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center"><MapPinIcon /> View</a>) : ('N/A')}</td>
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.registerDate?.toDate().toLocaleDateString()}</p></td>
                                     <td className="px-5 py-4 text-sm bg-white text-center">
                                         <div className="flex items-center justify-center space-x-3">
@@ -486,7 +495,7 @@ const CustomerManagement = ({ portalType }) => {
         </div>
     );
 };
-const ShopManagement = () => {
+const ShopManagement = ({ currentUser }) => {
     const [shops, setShops] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -554,7 +563,7 @@ const ShopManagement = () => {
 
     return (
         <div className="p-4 sm:p-8">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="6xl">
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Shop' : 'Register New Shop'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -572,7 +581,7 @@ const ShopManagement = () => {
                                     <input type="text" name="telephone" placeholder="Telephone" value={worker.telephone} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
                                     <input type="text" name="employeeNumber" placeholder="Employee No." value={worker.employeeNumber} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
                                     <input type="text" name="role" placeholder="Role" value={worker.role} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
-                                    <button type="button" onClick={() => removeWorker(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">&times;</button>
+                                    <button type="button" onClick={() => removeWorker(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
                                 </div>
                             ))}
                         </div>
@@ -598,47 +607,23 @@ const StockManagement = () => {
     const [error, setError] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-    const [formData, setFormData] = useState({ serials: [] });
+    const [formData, setFormData] = useState({});
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [currentSerial, setCurrentSerial] = useState('');
-    const [exchangeRate, setExchangeRate] = useState(null);
 
-    const fetchExchangeRate = useCallback(async () => {
-        try {
-            const response = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
-            if (!response.ok) throw new Error('Network response was not ok');
-            const data = await response.json();
-            const rate = data.usd?.lkr; 
-            if (rate) {
-                setExchangeRate(rate);
-                setFormData(prev => ({...prev, exchangeRate: rate, exchangeRateDate: new Date().toLocaleDateString() }));
-            } else {
-                 throw new Error('LKR rate not found in API response');
-            }
-        } catch (err) {
-            console.error("Failed to fetch exchange rate", err);
-            setError("Could not fetch live exchange rate. Please enter manually.");
-        }
-    }, []);
-    
-    const openAddModal = () => { 
-        setIsEditing(false); 
-        setFormData({ serials: [] }); 
-        fetchExchangeRate();
-        setIsModalOpen(true); 
-    };
+    // New state for serial number modal
+    const [isSerialsModalOpen, setIsSerialsModalOpen] = useState(false);
+    const [serialsData, setSerialsData] = useState({ itemName: '', serials: [] });
+    const [serialsLoading, setSerialsLoading] = useState(false);
 
-    const openEditModal = (item) => { 
-        setIsEditing(true); 
-        setFormData(item); 
-        setIsModalOpen(true); 
-    };
+    const openAddModal = () => { setIsEditing(false); setFormData({ qty: 0 }); setIsModalOpen(true); };
+    const openEditModal = (item) => { setIsEditing(true); setFormData(item); setIsModalOpen(true); };
 
     const fetchStock = useCallback(async () => {
         setLoading(true);
         try {
             const querySnapshot = await getDocs(collection(db, 'import_stock'));
-            setStock(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const stockList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setStock(stockList);
         } catch (err) { setError("Failed to fetch stock items."); }
         finally { setLoading(false); }
     }, []);
@@ -646,23 +631,11 @@ const StockManagement = () => {
     useEffect(() => { fetchStock(); }, [fetchStock]);
 
     const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleNumberChange = e => setFormData(prev => ({ ...prev, [e.target.name]: parseFloat(e.target.value) || 0 }));
     
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         setFormData(prev => ({ ...prev, pictureFile: file }));
-    };
-
-    const addSerial = () => {
-        if (currentSerial && !formData.serials.includes(currentSerial)) {
-            setFormData(prev => ({ ...prev, serials: [...prev.serials, currentSerial]}));
-            setCurrentSerial('');
-        }
-    };
-
-    const removeSerial = (index) => {
-        setFormData(prev => ({ ...prev, serials: prev.serials.filter((_, i) => i !== index)}));
     };
 
     const uploadImage = async (file) => {
@@ -685,14 +658,6 @@ const StockManagement = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         let dataToSave = { ...formData };
-        
-        const rate = dataToSave.manualExchangeRate || dataToSave.exchangeRate;
-        const totalUSD = (dataToSave.unitPrice || 0) + (dataToSave.fob || 0) + (dataToSave.freight || 0) + (dataToSave.handling_overseas || 0) + (dataToSave.insurance || 0);
-        const totalLKR = (dataToSave.bank || 0) + (dataToSave.duty || 0) + (dataToSave.vat || 0) + (dataToSave.other || 0) + (dataToSave.clearing || 0) + (dataToSave.transport || 0) + (dataToSave.unload || 0);
-        
-        dataToSave.finalUnitPrice = (totalUSD * rate) + totalLKR;
-        dataToSave.calculatedOnDate = Timestamp.now();
-        
         try {
             if (dataToSave.pictureFile) {
                 const { downloadURL, filePath } = await uploadImage(dataToSave.pictureFile);
@@ -705,10 +670,13 @@ const StockManagement = () => {
                 await updateDoc(doc(db, 'import_stock', dataToSave.id), dataToSave);
                 setStock(prev => prev.map(item => item.id === dataToSave.id ? dataToSave : item));
             } else {
+                // Ensure new items start with 0 quantity, to be updated by imports
+                dataToSave.qty = 0; 
                 const newDocRef = await addDoc(collection(db, 'import_stock'), dataToSave);
                 setStock(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
             }
             setIsModalOpen(false);
+            setFormData({});
         } catch (err) { setError("Failed to save stock item."); console.error(err); }
         finally { setUploadProgress(0); }
     };
@@ -725,21 +693,47 @@ const StockManagement = () => {
             catch (err) { setError("Failed to delete item."); console.error(err); }
         }
     };
+    
+    const viewSerials = async (item) => {
+        setSerialsLoading(true);
+        setIsSerialsModalOpen(true);
+        setSerialsData({ itemName: item.name, serials: [] });
+        try {
+            const serialsColRef = collection(db, 'import_stock', item.id, 'serials');
+            const querySnapshot = await getDocs(serialsColRef);
+            const serialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSerialsData({ itemName: item.name, serials: serialsList });
+        } catch (err) {
+            console.error("Failed to fetch serial numbers:", err);
+            setError("Could not fetch serial numbers for this item.");
+        } finally {
+            setSerialsLoading(false);
+        }
+    };
 
-    const finalPriceCalculation = useMemo(() => {
-        const { unitPrice, fob, freight, handling_overseas, insurance, bank, duty, vat, other, clearing, transport, unload, manualExchangeRate } = formData;
-        const rate = manualExchangeRate || exchangeRate;
-        if (!rate) return "Enter exchange rate...";
-        const totalUSD = (unitPrice || 0) + (fob || 0) + (freight || 0) + (handling_overseas || 0) + (insurance || 0);
-        const totalLKR = (bank || 0) + (duty || 0) + (vat || 0) + (other || 0) + (clearing || 0) + (transport || 0) + (unload || 0);
-        return ((totalUSD * rate) + totalLKR).toFixed(2);
-    }, [formData, exchangeRate]);
 
     if(loading) return <div className="p-8 text-center">Loading Stock...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     return (
         <div className="p-4 sm:p-8">
+             <Modal isOpen={isSerialsModalOpen} onClose={() => setIsSerialsModalOpen(false)} size="lg">
+                <h3 className="text-xl font-bold mb-4">Serial Numbers for {serialsData.itemName}</h3>
+                {serialsLoading ? <p>Loading serials...</p> : (
+                    <div className="max-h-96 overflow-y-auto">
+                        {serialsData.serials.length > 0 ? (
+                            <ul className="divide-y divide-gray-200">
+                                {serialsData.serials.map(serial => (
+                                    <li key={serial.id} className="py-3 flex justify-between items-center">
+                                        <span className="font-mono text-gray-700">{serial.id}</span>
+                                        <span className="font-semibold text-gray-800">LKR {serial.finalCostLKR?.toFixed(2)}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : <p>No serial numbers found for this item.</p>}
+                    </div>
+                )}
+            </Modal>
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Stock Item' : 'Add New Stock Item'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
@@ -749,6 +743,7 @@ const StockManagement = () => {
                             <div><label>Model</label><input type="text" name="model" value={formData.model || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
                             <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description || ''} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea></div>
                             <div><label>Supplier</label><input type="text" name="supplier" value={formData.supplier || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                             <div><label>Unit of Measure</label><select name="uom" value={formData.uom || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="">Select</option>{unitsOfMeasure.map(u=><option key={u} value={u}>{u}</option>)}</select></div>
                         </div>
                     </fieldset>
                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Specifications</legend>
@@ -761,66 +756,28 @@ const StockManagement = () => {
                             <div><label>Outlet</label><input type="text" name="outlet" value={formData.outlet || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
                         </div>
                     </fieldset>
-                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Quantity</legend>
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div><label>Quantity</label><input type="number" name="qty" required value={formData.qty || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
-                            <div><label>Unit of Measure</label><select name="uom" value={formData.uom || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="">Select</option>{unitsOfMeasure.map(u=><option key={u} value={u}>{u}</option>)}</select></div>
-                         </div>
-                    </fieldset>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Pricing (USD)</legend>
-                            <div className="grid grid-cols-2 gap-4">
-                                {['unitPrice', 'fob', 'freight', 'handling_overseas', 'insurance'].map(cost => (
-                                    <div key={cost}><label className="capitalize text-sm">{cost.replace('_',' ')}</label><input type="number" step="0.01" name={cost} value={formData[cost] || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
-                                ))}
-                            </div>
-                        </fieldset>
-                         <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Additional Costs (LKR)</legend>
-                            <div className="grid grid-cols-2 gap-4">
-                               {['bank', 'duty', 'vat', 'other', 'clearing', 'transport', 'unload'].map(cost => (
-                                    <div key={cost}><label className="capitalize text-sm">{cost}</label><input type="number" step="0.01" name={cost} value={formData[cost] || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/></div>
-                               ))}
-                            </div>
-                        </fieldset>
-                    </div>
-
-                    <fieldset className="border p-4 rounded-md bg-gray-50"><legend className="font-semibold px-2">Cost Calculation</legend>
-                        <div className="flex flex-wrap items-center gap-4">
-                            <div className="flex-1 min-w-[200px]"><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="manualExchangeRate" placeholder={`Auto: ${exchangeRate || '...'}`} value={formData.manualExchangeRate || ''} onChange={handleNumberChange} className="w-full p-2 border rounded"/>
-                                <p className="text-xs text-gray-500 mt-1">Live rate fetched for {formData.exchangeRateDate || 'today'}. Enter a value to override.</p>
-                            </div>
-                            <div className="flex-1 text-center">
-                                <p className="text-sm font-medium text-gray-600">Calculated Final Unit Price</p>
-                                <p className="text-2xl font-bold text-blue-600">LKR {finalPriceCalculation}</p>
-                            </div>
-                        </div>
-                    </fieldset>
-
-                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Image & Serial Numbers</legend>
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Image</legend>
                         <div><label>Product Picture</label><input type="file" name="pictureFile" onChange={handleFileChange} className="w-full p-2 border rounded"/></div>
                         {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full mt-2"><div className="bg-blue-600 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style={{width: `${uploadProgress}%`}}> {Math.round(uploadProgress)}%</div></div>}
                         {formData.imageUrl && !formData.pictureFile && <img src={formData.imageUrl} alt="Product" className="h-24 w-auto mt-2 rounded"/>}
-                        <div><label>Serial Numbers</label>
-                            <div className="flex"><input type="text" value={currentSerial} onChange={(e) => setCurrentSerial(e.target.value)} className="w-full p-2 border rounded-l-md" placeholder="Enter one serial number"/><button type="button" onClick={addSerial} className="bg-gray-600 text-white px-4 rounded-r-md">Add</button></div>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {(formData.serials || []).map((serial, index) => (
-                                    <span key={index} className="bg-gray-200 text-gray-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center">{serial} <button type="button" onClick={() => removeSerial(index)} className="ml-2 text-red-500 font-bold">&times;</button></span>
-                                ))}
-                            </div>
-                        </div>
                     </fieldset>
                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Item'}</button></div>
                 </form>
             </Modal>
             <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Stock Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Item</button></div>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-left">Unit Price (Final)</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                 <tbody>{stock.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50">
                     <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
-                    <td className="px-5 py-4 text-sm">{item.qty} {item.uom}</td>
-                    <td className="px-5 py-4 text-sm font-semibold">LKR {item.finalUnitPrice?.toFixed(2)}</td>
-                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button className="text-gray-500 hover:text-gray-800 text-sm">Assign Serials</button><button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
-                </tr>))}</tbody></table></div>
+                    <td className="px-5 py-4 text-sm font-semibold">{item.qty} {item.uom}</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
+                        <button onClick={() => viewSerials(item)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Serials</button>
+                        <button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                        <button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                        </div>
+                    </td>
+                </tr>))}</tbody>
+            </table>
+            </div>
         </div>
     );
 };
@@ -892,7 +849,7 @@ const SupplierManagement = () => {
 
     return (
         <div className="p-4 sm:p-8">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="6xl">
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -910,7 +867,7 @@ const SupplierManagement = () => {
                                     <input type="text" name="name" placeholder="Name" value={person.name} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded md:col-span-2"/>
                                     <input type="email" name="email" placeholder="Email" value={person.email} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
                                     <input type="tel" name="contactNumber" placeholder="Contact No" value={person.contactNumber} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
-                                    <button type="button" onClick={() => removeContact(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">&times;</button>
+                                    <button type="button" onClick={() => removeContact(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
                                 </div>
                             ))}
                         </div>
@@ -927,6 +884,268 @@ const SupplierManagement = () => {
                     <td className="px-5 py-4 text-sm">{supplier.contactPersons?.map(p => p.name).join(', ')}</td>
                     <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
                 </tr>))}</tbody></table></div>
+        </div>
+    );
+};
+// +++ NEW COMPONENT +++
+const ImportManagementPortal = () => {
+    const [view, setView] = useState('list'); // 'list' or 'form'
+    const [imports, setImports] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    // Form state
+    const [isCalculated, setIsCalculated] = useState(false);
+    const [formData, setFormData] = useState({
+        invoiceNo: '', supplierId: '', items: [],
+        costsUSD: { fob: 0, freight: 0, handlingOverseas: 0, insurance: 0 },
+        costsLKR: { bank: 0, duty: 0, vat: 0, clearing: 0, transport: 0, unload: 0, others: 0 },
+        exchangeRate: 0, exchangeRateDate: null,
+    });
+    const [formSelections, setFormSelections] = useState({
+        selectedStockId: '', selectedQty: 1, selectedUOM: '', selectedUnitPrice: 0
+    });
+
+    const fetchInitialData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [importsSnap, suppliersSnap, stockSnap] = await Promise.all([
+                getDocs(collection(db, 'imports')),
+                getDocs(collection(db, 'suppliers')),
+                getDocs(collection(db, 'import_stock')),
+            ]);
+            setImports(importsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setSuppliers(suppliersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setStockItems(stockSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load required data.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+    
+    useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
+
+    const handleCreateNew = async () => {
+        setFormData({
+            invoiceNo: '', supplierId: '', items: [],
+            costsUSD: { fob: 0, freight: 0, handlingOverseas: 0, insurance: 0 },
+            costsLKR: { bank: 0, duty: 0, vat: 0, clearing: 0, transport: 0, unload: 0, others: 0 },
+            exchangeRate: 0, exchangeRateDate: null,
+        });
+        setIsCalculated(false);
+        try {
+            const response = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+            if (!response.ok) throw new Error('API fetch failed');
+            const data = await response.json();
+            const rate = data.usd?.lkr;
+            if (rate) {
+                setFormData(prev => ({ ...prev, exchangeRate: rate, exchangeRateDate: new Date().toISOString().split('T')[0] }));
+            } else {
+                throw new Error('LKR rate not found');
+            }
+        } catch (err) {
+            console.error("Exchange rate fetch error:", err);
+            setError("Could not fetch live exchange rate. Please enter manually.");
+        }
+        setView('form');
+    };
+    
+    const handleAddItem = () => {
+        const stockItem = stockItems.find(s => s.id === formSelections.selectedStockId);
+        if (!stockItem || formSelections.selectedQty <= 0) return;
+        const newItem = {
+            stockItemId: stockItem.id,
+            name: stockItem.name,
+            model: stockItem.model,
+            qty: parseFloat(formSelections.selectedQty),
+            uom: formSelections.selectedUOM,
+            unitPriceUSD: parseFloat(formSelections.selectedUnitPrice)
+        };
+        setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
+        setFormSelections({ selectedStockId: '', selectedQty: 1, selectedUOM: '', selectedUnitPrice: 0 }); // Reset
+    };
+    
+    const handleCalculate = () => {
+        const { items, costsUSD, costsLKR, exchangeRate } = formData;
+        if (!exchangeRate || exchangeRate <= 0) {
+            alert("Please provide a valid exchange rate.");
+            return;
+        }
+
+        const totalItemCostUSD = items.reduce((acc, item) => acc + (item.unitPriceUSD * item.qty), 0);
+        if (totalItemCostUSD === 0) return; // Avoid division by zero
+
+        const totalAdditionalCostUSD = Object.values(costsUSD).reduce((sum, val) => sum + parseFloat(val || 0), 0);
+        const totalAdditionalCostLKR = Object.values(costsLKR).reduce((sum, val) => sum + parseFloat(val || 0), 0);
+        
+        const grandTotalLKR = ((totalItemCostUSD + totalAdditionalCostUSD) * exchangeRate) + totalAdditionalCostLKR;
+        const totalLandedCostToAdd = grandTotalLKR - (totalItemCostUSD * exchangeRate);
+
+        let serialCounter = 1;
+        const updatedItems = items.map(item => {
+            const itemTotalUSD = item.unitPriceUSD * item.qty;
+            const itemValuePercentage = itemTotalUSD / totalItemCostUSD;
+            const landedCostForItem = totalLandedCostToAdd * itemValuePercentage;
+            const finalTotalCostLKR = (itemTotalUSD * exchangeRate) + landedCostForItem;
+            const finalUnitPriceLKR = finalTotalCostLKR / item.qty;
+            
+            const serials = Array.from({ length: item.qty }, () => `SN${String(serialCounter++).padStart(5, '0')}`);
+            
+            return { ...item, finalUnitPriceLKR, serials };
+        });
+
+        setFormData(prev => ({ ...prev, items: updatedItems }));
+        setIsCalculated(true);
+    };
+
+    const handleSave = async () => {
+        if (!formData.invoiceNo || !formData.supplierId || formData.items.length === 0) {
+            alert("Please fill in Invoice No, Supplier, and add at least one item.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const batch = writeBatch(db);
+            
+            // 1. Set the main import document
+            const importDocRef = doc(db, 'imports', formData.invoiceNo);
+            batch.set(importDocRef, { ...formData, createdAt: Timestamp.now() });
+
+            // 2. Update stock quantities and add serial numbers
+            for (const item of formData.items) {
+                const stockDocRef = doc(db, 'import_stock', item.stockItemId);
+                const stockDocSnap = await getDoc(stockDocRef);
+                if (!stockDocSnap.exists()) throw new Error(`Stock item ${item.name} not found!`);
+                
+                const currentQty = stockDocSnap.data().qty || 0;
+                batch.update(stockDocRef, { qty: currentQty + item.qty });
+                
+                // Add serials to subcollection
+                for (const serialNo of item.serials) {
+                    const serialDocRef = doc(db, 'import_stock', item.stockItemId, 'serials', serialNo);
+                    batch.set(serialDocRef, {
+                        importInvoiceNo: formData.invoiceNo,
+                        purchaseDate: Timestamp.now(),
+                        finalCostLKR: item.finalUnitPriceLKR
+                    });
+                }
+            }
+            
+            await batch.commit();
+            await fetchInitialData(); // Refresh list
+            setView('list');
+
+        } catch (err) {
+            console.error("Save error:", err);
+            setError("Failed to save import. Check console for details.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleInputChange = (e, category) => {
+        const { name, value } = e.target;
+        if (category) {
+            setFormData(prev => ({ ...prev, [category]: { ...prev[category], [name]: parseFloat(value) || 0 }}));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+
+    if (loading && view === 'list') return <div className="p-8 text-center">Loading Imports...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    if (view === 'form') {
+        return (
+            <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-800">Create New Import</h2>
+                    <div>
+                        <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Cancel</button>
+                        <button onClick={handleSave} disabled={!isCalculated} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">Save Import</button>
+                    </div>
+                </div>
+
+                {/* --- HEADER FIELDS --- */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 border rounded-md">
+                    <div><label>Import Invoice No.</label><input type="text" name="invoiceNo" value={formData.invoiceNo} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/></div>
+                    <div><label>Supplier</label><select name="supplierId" value={formData.supplierId} onChange={handleInputChange} className="w-full p-2 border rounded bg-white" disabled={isCalculated}><option value="">Select Supplier</option>{suppliers.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}</select></div>
+                    <div><label>Exchange Rate (USD to LKR)</label><input type="number" step="any" name="exchangeRate" value={formData.exchangeRate} onChange={handleInputChange} className="w-full p-2 border rounded" disabled={isCalculated}/><p className="text-xs text-gray-500">Fetched for: {formData.exchangeRateDate}</p></div>
+                </div>
+
+                {/* --- ITEM ENTRY --- */}
+                <fieldset className="mb-6 p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Add Items</legend>
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-end">
+                        <div className="lg:col-span-2"><label>Product</label><select value={formSelections.selectedStockId} onChange={e => setFormSelections(prev => ({...prev, selectedStockId: e.target.value}))} className="w-full p-2 border rounded bg-white"><option value="">Select Product</option>{stockItems.map(s => <option key={s.id} value={s.id}>{s.name} - {s.model}</option>)}</select></div>
+                        <div><label>Quantity</label><input type="number" value={formSelections.selectedQty} onChange={e => setFormSelections(prev => ({...prev, selectedQty: e.target.value}))} className="w-full p-2 border rounded"/></div>
+                        <div><label>Unit Price (USD)</label><input type="number" step="0.01" value={formSelections.selectedUnitPrice} onChange={e => setFormSelections(prev => ({...prev, selectedUnitPrice: e.target.value}))} className="w-full p-2 border rounded"/></div>
+                        <div><button onClick={handleAddItem} className="w-full bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Add Item</button></div>
+                    </div>
+                </fieldset>
+
+                {/* --- COSTS --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <fieldset className="p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Costs (USD)</legend><div className="grid grid-cols-2 gap-4">{['fob', 'freight', 'handlingOverseas', 'insurance'].map(k => <div key={k}><label className="capitalize text-sm">{k.replace('O',' O')}</label><input type="number" step="0.01" name={k} value={formData.costsUSD[k]} onChange={(e) => handleInputChange(e, 'costsUSD')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
+                    <fieldset className="p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Costs (LKR)</legend><div className="grid grid-cols-2 gap-4">{['bank', 'duty', 'vat', 'clearing', 'transport', 'unload', 'others'].map(k => <div key={k}><label className="capitalize text-sm">{k}</label><input type="number" step="0.01" name={k} value={formData.costsLKR[k]} onChange={(e) => handleInputChange(e, 'costsLKR')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
+                </div>
+
+                {/* --- ITEMS TABLE --- */}
+                <div className="overflow-x-auto mb-6">
+                    <table className="min-w-full">
+                        <thead><tr className="bg-gray-100"><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-left">Qty</th><th className="px-4 py-2 text-left">Unit Price (USD)</th><th className="px-4 py-2 text-left">Total (USD)</th><th className="px-4 py-2 text-left">Final Unit Price (LKR)</th><th className="px-4 py-2 text-left">Serials</th></tr></thead>
+                        <tbody>{formData.items.map((item, index) => (<tr key={index} className="border-b">
+                            <td className="px-4 py-2">{item.name}</td><td className="px-4 py-2">{item.qty}</td><td className="px-4 py-2">{item.unitPriceUSD.toFixed(2)}</td>
+                            <td className="px-4 py-2">{(item.unitPriceUSD * item.qty).toFixed(2)}</td>
+                            <td className="px-4 py-2 font-semibold">{item.finalUnitPriceLKR ? item.finalUnitPriceLKR.toFixed(2) : 'N/A'}</td>
+                             <td className="px-4 py-2">{item.serials ? <select className="w-full p-1 border rounded bg-white text-sm"><option>{item.serials.length} serials generated</option>{item.serials.map(s => <option key={s} disabled>{s}</option>)}</select> : 'N/A'}</td>
+                        </tr>))}</tbody>
+                    </table>
+                </div>
+
+                {/* --- ACTION BUTTONS --- */}
+                <div className="flex justify-end space-x-4">
+                    {isCalculated && <button onClick={() => setIsCalculated(false)} className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">Edit</button>}
+                    <button onClick={handleCalculate} disabled={isCalculated} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">Calculate Final Prices & Serials</button>
+                </div>
+            </div>
+        );
+    }
+    
+    return (
+        <div className="p-4 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Import Management</h2>
+                <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <PlusCircleIcon/> Create Import
+                </button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Invoice #</th><th className="px-5 py-3 text-left">Supplier</th><th className="px-5 py-3 text-left">Date</th><th className="px-5 py-3 text-left">Items</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                    <tbody>
+                        {imports.map(imp => {
+                            const supplier = suppliers.find(s => s.id === imp.supplierId);
+                            return (
+                                <tr key={imp.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-5 py-4 font-semibold">{imp.id}</td>
+                                    <td className="px-5 py-4">{supplier?.companyName || 'N/A'}</td>
+                                    <td className="px-5 py-4 text-sm">{imp.createdAt?.toDate().toLocaleDateString()}</td>
+                                    <td className="px-5 py-4 text-sm">{imp.items.length}</td>
+                                    <td className="px-5 py-4 text-center">
+                                        {/* Future actions like 'View Details' can be added here */}
+                                        <button className="text-blue-600 hover:text-blue-900 text-sm">View</button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
@@ -970,7 +1189,7 @@ const HomePage = ({ onSignInClick }) => {
             <section id="contact" className="py-20 bg-gray-900 text-white">
                 <div className="container mx-auto px-6"><h2 className="text-3xl font-bold text-center mb-12 text-yellow-500">Ready to Go Solar?</h2><div className="max-w-2xl mx-auto text-center"><p className="mb-8">Contact us today for a free consultation and quote. Our experts will help you design the perfect solar system for your needs.</p><p className="text-xl font-bold">Call Us: +94 77 123 4567</p><p className="text-xl font-bold">Email: info@irnsolarhouse.lk</p><p className="mt-4">Or visit us at our office in Negombo, Sri Lanka.</p></div></div>
             </section>
-            <footer className="bg-gray-800 text-white py-6"><div className="container mx-auto px-6 text-center text-sm"><p>&copy; {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
+            <footer className="bg-gray-800 text-white py-6"><div className="container mx-auto px-6 text-center text-sm"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
         </div>
     );
 };
@@ -1009,6 +1228,7 @@ const Dashboard = ({ user, onSignOut }) => {
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportPortal />;
+            case 'import_management': return <ImportManagementPortal />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement />;
             case 'import_shop_management': return <ShopManagement />;
@@ -1038,7 +1258,14 @@ const Dashboard = ({ user, onSignOut }) => {
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
                         {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
-                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="import_dashboard">Import Dashboard</NavLink><NavLink view="import_customer_management">Customer Management</NavLink><NavLink view="import_stock_management">Stock Management</NavLink><NavLink view="import_shop_management">Shop Management</NavLink><NavLink view="import_supplier_management">Supplier Management</NavLink></div>}
+                            {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50">
+                                <NavLink view="import_dashboard">Import Dashboard</NavLink>
+                                <NavLink view="import_management">Import Management</NavLink>
+                                <NavLink view="import_customer_management">Customer Management</NavLink>
+                                <NavLink view="import_stock_management">Stock Management</NavLink>
+                                <NavLink view="import_shop_management">Shop Management</NavLink>
+                                <NavLink view="import_supplier_management">Supplier Management</NavLink>
+                                </div>}
                         </div>)}
                         {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
                             {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
@@ -1089,4 +1316,3 @@ export default function App() {
 
   return (<div className="font-sans">{renderContent()}</div>);
 }
-
