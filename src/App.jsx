@@ -231,7 +231,7 @@ const UserManagementPortal = ({ currentUser }) => {
     const handleRoleChange = async (userId, newRole) => {
         try {
             await updateDoc(doc(db, 'users', userId), { role: newRole });
-            fetchUsers();
+            setUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
         } catch (err) { setError('Failed to update role.'); }
     };
 
@@ -239,8 +239,8 @@ const UserManagementPortal = ({ currentUser }) => {
         if (!userToDelete) return;
         try {
             await deleteDoc(doc(db, 'users', userToDelete.id));
+            setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
             setUserToDelete(null);
-            fetchUsers();
         } catch (err) {
             setError('Failed to delete user data.');
             setUserToDelete(null);
@@ -388,11 +388,12 @@ const CustomerManagement = ({ portalType }) => {
             if (isEditing) {
                 const docRef = doc(db, collectionName, formData.id);
                 await updateDoc(docRef, formData);
+                setCustomers(prev => prev.map(c => c.id === formData.id ? formData : c));
             } else {
                 const dataToSave = { ...formData, registerDate: Timestamp.now() };
-                await addDoc(collection(db, collectionName), dataToSave);
+                const newDocRef = await addDoc(collection(db, collectionName), dataToSave);
+                setCustomers(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
             }
-            fetchCustomers();
             setIsModalOpen(false);
         } catch (err) {
             setError('Failed to save customer data.');
@@ -416,7 +417,7 @@ const CustomerManagement = ({ portalType }) => {
         if (window.confirm('Are you sure you want to delete this customer?')) {
             try {
                 await deleteDoc(doc(db, collectionName, customerId));
-                fetchCustomers();
+                setCustomers(prev => prev.filter(c => c.id !== customerId));
             } catch (err) { setError('Failed to delete customer.'); }
         }
     };
@@ -527,10 +528,11 @@ const ShopManagement = () => {
         try {
             if (isEditing) {
                 await updateDoc(doc(db, 'shops', formData.id), formData);
+                setShops(prev => prev.map(s => s.id === formData.id ? formData : s));
             } else {
-                await addDoc(collection(db, 'shops'), formData);
+                const newDocRef = await addDoc(collection(db, 'shops'), formData);
+                setShops(prev => [...prev, {id: newDocRef.id, ...formData}]);
             }
-            fetchShops();
             setIsModalOpen(false);
         } catch (err) { setError("Failed to save shop details."); console.error(err) }
     };
@@ -539,7 +541,10 @@ const ShopManagement = () => {
     const openEditModal = (shop) => { setIsEditing(true); setFormData(shop); setIsModalOpen(true); };
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this shop?')) {
-            try { await deleteDoc(doc(db, 'shops', id)); fetchShops(); }
+            try { 
+                await deleteDoc(doc(db, 'shops', id));
+                setShops(prev => prev.filter(s => s.id !== id));
+            }
             catch (err) { setError("Failed to delete shop."); }
         }
     };
@@ -601,10 +606,15 @@ const StockManagement = () => {
     const fetchExchangeRate = useCallback(async () => {
         try {
             const response = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+            if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
-            const rate = data.usd.lkr; // Corrected path
-            setExchangeRate(rate);
-            setFormData(prev => ({...prev, exchangeRate: rate, exchangeRateDate: new Date().toLocaleDateString() }));
+            const rate = data.usd?.lkr; 
+            if (rate) {
+                setExchangeRate(rate);
+                setFormData(prev => ({...prev, exchangeRate: rate, exchangeRateDate: new Date().toLocaleDateString() }));
+            } else {
+                 throw new Error('LKR rate not found in API response');
+            }
         } catch (err) {
             console.error("Failed to fetch exchange rate", err);
             setError("Could not fetch live exchange rate. Please enter manually.");
@@ -693,10 +703,11 @@ const StockManagement = () => {
 
             if (isEditing) {
                 await updateDoc(doc(db, 'import_stock', dataToSave.id), dataToSave);
+                setStock(prev => prev.map(item => item.id === dataToSave.id ? dataToSave : item));
             } else {
-                await addDoc(collection(db, 'import_stock'), dataToSave);
+                const newDocRef = await addDoc(collection(db, 'import_stock'), dataToSave);
+                setStock(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
             }
-            fetchStock();
             setIsModalOpen(false);
         } catch (err) { setError("Failed to save stock item."); console.error(err); }
         finally { setUploadProgress(0); }
@@ -709,7 +720,7 @@ const StockManagement = () => {
                     await deleteObject(ref(storage, item.imagePath));
                 }
                 await deleteDoc(doc(db, 'import_stock', item.id));
-                fetchStock();
+                setStock(prev => prev.filter(s => s.id !== item.id));
             }
             catch (err) { setError("Failed to delete item."); console.error(err); }
         }
@@ -732,7 +743,6 @@ const StockManagement = () => {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Stock Item' : 'Add New Stock Item'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    {/* ... other fieldsets are the same ... */}
                      <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Item Details</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label>Item Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
@@ -810,6 +820,112 @@ const StockManagement = () => {
                     <td className="px-5 py-4 text-sm">{item.qty} {item.uom}</td>
                     <td className="px-5 py-4 text-sm font-semibold">LKR {item.finalUnitPrice?.toFixed(2)}</td>
                     <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button className="text-gray-500 hover:text-gray-800 text-sm">Assign Serials</button><button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
+                </tr>))}</tbody></table></div>
+        </div>
+    );
+};
+const SupplierManagement = () => {
+    const [suppliers, setSuppliers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({ contactPersons: [] });
+
+    const fetchSuppliers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'suppliers'));
+            setSuppliers(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), contactPersons: doc.data().contactPersons || [] })));
+        } catch (err) { setError("Failed to fetch suppliers."); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
+
+    const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    
+    const handleContactChange = (index, e) => {
+        const updatedContacts = [...formData.contactPersons];
+        updatedContacts[index][e.target.name] = e.target.value;
+        setFormData(prev => ({ ...prev, contactPersons: updatedContacts }));
+    };
+
+    const addContact = () => {
+        setFormData(prev => ({ ...prev, contactPersons: [...(prev.contactPersons || []), { name: '', email: '', contactNumber: '' }] }));
+    };
+    
+    const removeContact = (index) => {
+        const updatedContacts = [...formData.contactPersons];
+        updatedContacts.splice(index, 1);
+        setFormData(prev => ({ ...prev, contactPersons: updatedContacts }));
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                await updateDoc(doc(db, 'suppliers', formData.id), formData);
+                setSuppliers(prev => prev.map(s => s.id === formData.id ? formData : s));
+            } else {
+                const newDocRef = await addDoc(collection(db, 'suppliers'), formData);
+                setSuppliers(prev => [...prev, {id: newDocRef.id, ...formData}]);
+            }
+            setIsModalOpen(false);
+        } catch (err) { setError("Failed to save supplier details."); console.error(err) }
+    };
+    
+    const openAddModal = () => { setIsEditing(false); setFormData({ contactPersons: [] }); setIsModalOpen(true); };
+    const openEditModal = (supplier) => { setIsEditing(true); setFormData(supplier); setIsModalOpen(true); };
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this supplier?')) {
+            try { 
+                await deleteDoc(doc(db, 'suppliers', id));
+                setSuppliers(prev => prev.filter(s => s.id !== id));
+            }
+            catch (err) { setError("Failed to delete supplier."); }
+        }
+    };
+    
+    if(loading) return <div className="p-8 text-center">Loading Suppliers...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label>Company Name</label><input type="text" name="companyName" required value={formData.companyName || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                        <div><label>Contact No</label><input type="tel" name="contactNo" required value={formData.contactNo || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                        <div className="md:col-span-2"><label>Address</label><input type="text" name="address" required value={formData.address || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
+                        <div><label>Currency</label><select name="currency" value={formData.currency || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="USD">USD</option><option value="LKR">LKR</option></select></div>
+                        <div className="md:col-span-2"><label>Notes</label><textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea></div>
+                     </div>
+                     <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">Contact Persons</legend>
+                        <div className="space-y-3">
+                            {(formData.contactPersons || []).map((person, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 bg-gray-50 rounded-md relative">
+                                    <input type="text" name="name" placeholder="Name" value={person.name} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="email" name="email" placeholder="Email" value={person.email} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
+                                    <input type="tel" name="contactNumber" placeholder="Contact No" value={person.contactNumber} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
+                                    <button type="button" onClick={() => removeContact(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">&times;</button>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addContact} className="mt-3 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Add Contact</button>
+                     </fieldset>
+                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Supplier'}</button></div>
+                </form>
+            </Modal>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Supplier</button></div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Company</th><th className="px-5 py-3 text-left">Contact</th><th className="px-5 py-3 text-left">Contacts</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <tbody>{suppliers.map(supplier => (<tr key={supplier.id} className="border-b hover:bg-gray-50">
+                    <td className="px-5 py-4"><p className="font-semibold">{supplier.companyName}</p><p className="text-sm text-gray-600">{supplier.address}</p></td>
+                    <td className="px-5 py-4 text-sm"><p>{supplier.contactNo}</p><p>{supplier.currency}</p></td>
+                    <td className="px-5 py-4 text-sm">{supplier.contactPersons?.map(p => p.name).join(', ')}</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
                 </tr>))}</tbody></table></div>
         </div>
     );
@@ -973,4 +1089,3 @@ export default function App() {
 
   return (<div className="font-sans">{renderContent()}</div>);
 }
-
