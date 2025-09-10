@@ -502,6 +502,9 @@ const ShopManagement = ({ currentUser }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ workers: [] });
+    // New state for viewing workers
+    const [isWorkersModalOpen, setIsWorkersModalOpen] = useState(false);
+    const [selectedShopForWorkers, setSelectedShopForWorkers] = useState(null);
 
     const fetchShops = useCallback(async () => {
         setLoading(true);
@@ -557,12 +560,42 @@ const ShopManagement = ({ currentUser }) => {
             catch (err) { setError("Failed to delete shop."); }
         }
     };
+    
+    const openWorkersModal = (shop) => {
+        setSelectedShopForWorkers(shop);
+        setIsWorkersModalOpen(true);
+    };
 
     if(loading) return <div className="p-8 text-center">Loading Shops...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     return (
         <div className="p-4 sm:p-8">
+            <Modal isOpen={isWorkersModalOpen} onClose={() => setIsWorkersModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">Worker Details for {selectedShopForWorkers?.name}</h3>
+                {selectedShopForWorkers?.workers?.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead className="bg-gray-100"><tr>
+                                <th className="px-4 py-2 text-left">Name</th>
+                                <th className="px-4 py-2 text-left">Telephone</th>
+                                <th className="px-4 py-2 text-left">Employee No.</th>
+                                <th className="px-4 py-2 text-left">Role</th>
+                            </tr></thead>
+                            <tbody>
+                                {selectedShopForWorkers.workers.map((worker, index) => (
+                                    <tr key={index} className="border-b">
+                                        <td className="px-4 py-2">{worker.name}</td>
+                                        <td className="px-4 py-2">{worker.telephone}</td>
+                                        <td className="px-4 py-2">{worker.employeeNumber}</td>
+                                        <td className="px-4 py-2">{worker.role}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : <p>No workers assigned to this shop.</p>}
+            </Modal>
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="6xl">
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Shop' : 'Register New Shop'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
@@ -595,8 +628,12 @@ const ShopManagement = ({ currentUser }) => {
                 <tbody>{shops.map(shop => (<tr key={shop.id} className="border-b hover:bg-gray-50">
                     <td className="px-5 py-4"><p className="font-semibold">{shop.name}</p><p className="text-sm text-gray-600">{shop.address}</p></td>
                     <td className="px-5 py-4 text-sm"><p>{shop.telephone}</p><p>{shop.email}</p></td>
-                    <td className="px-5 py-4 text-sm">{shop.workers?.map(w => w.name).join(', ')}</td>
-                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button onClick={() => openEditModal(shop)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(shop.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
+                    <td className="px-5 py-4 text-sm">{shop.workers?.length || 0} assigned</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
+                        <button onClick={() => openWorkersModal(shop)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Workers</button>
+                        <button onClick={() => openEditModal(shop)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                        <button onClick={() => handleDelete(shop.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                        </div></td>
                 </tr>))}</tbody></table></div>
         </div>
     );
@@ -609,6 +646,7 @@ const StockManagement = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({});
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [searchTerm, setSearchTerm] = useState("");
 
     // New state for serial number modal
     const [isSerialsModalOpen, setIsSerialsModalOpen] = useState(false);
@@ -711,6 +749,10 @@ const StockManagement = () => {
         }
     };
 
+    const filteredStock = stock.filter(item =>
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.model?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if(loading) return <div className="p-8 text-center">Loading Stock...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
@@ -765,18 +807,21 @@ const StockManagement = () => {
                 </form>
             </Modal>
             <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Stock Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Item</button></div>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
-                <tbody>{stock.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50">
-                    <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
-                    <td className="px-5 py-4 text-sm font-semibold">{item.qty} {item.uom}</td>
-                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
-                        <button onClick={() => viewSerials(item)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Serials</button>
-                        <button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
-                        <button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
-                        </div>
-                    </td>
-                </tr>))}</tbody>
-            </table>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b"><input type="text" placeholder="Search by item name or model..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                    <tbody>{filteredStock.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50">
+                        <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
+                        <td className="px-5 py-4 text-sm font-semibold">{item.qty} {item.uom}</td>
+                        <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
+                            <button onClick={() => viewSerials(item)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Serials</button>
+                            <button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                            <button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                            </div>
+                        </td>
+                    </tr>))}</tbody>
+                </table>
+                </div>
             </div>
         </div>
     );
@@ -887,13 +932,15 @@ const SupplierManagement = () => {
         </div>
     );
 };
-const ImportManagementPortal = () => {
+const ImportManagementPortal = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [imports, setImports] = useState([]);
     const [suppliers, setSuppliers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isReadOnly, setIsReadOnly] = useState(false);
 
     // Form state
     const [isCalculated, setIsCalculated] = useState(false);
@@ -929,6 +976,7 @@ const ImportManagementPortal = () => {
     useEffect(() => { fetchInitialData(); }, [fetchInitialData]);
 
     const handleCreateNew = async () => {
+        setIsReadOnly(false);
         setFormData({
             invoiceNo: '', supplierId: '', items: [],
             costsUSD: { fob: 0, freight: 0, handlingOverseas: 0, insurance: 0 },
@@ -950,6 +998,13 @@ const ImportManagementPortal = () => {
             console.error("Exchange rate fetch error:", err);
             setError("Could not fetch live exchange rate. Please enter manually.");
         }
+        setView('form');
+    };
+    
+    const handleViewImport = (importData) => {
+        setFormData(importData);
+        setIsCalculated(true);
+        setIsReadOnly(true);
         setView('form');
     };
 
@@ -1063,19 +1118,24 @@ const ImportManagementPortal = () => {
             setFormData(prev => ({ ...prev, [name]: value }));
         }
     };
-
+    
+    const filteredImports = imports.filter(imp => 
+        imp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        suppliers.find(s => s.id === imp.supplierId)?.companyName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if (loading && view === 'list') return <div className="p-8 text-center">Loading Imports...</div>;
     if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     if (view === 'form') {
+        const formTitle = isReadOnly ? `Viewing Import: ${formData.id}` : 'Create New Import';
         return (
             <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-bold text-gray-800">Create New Import</h2>
+                    <h2 className="text-3xl font-bold text-gray-800">{formTitle}</h2>
                     <div>
-                        <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Cancel</button>
-                        <button onClick={handleSave} disabled={!isCalculated} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">Save Import</button>
+                        <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
+                        {!isReadOnly && <button onClick={handleSave} disabled={!isCalculated} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">Save Import</button>}
                     </div>
                 </div>
 
@@ -1087,19 +1147,19 @@ const ImportManagementPortal = () => {
                 </div>
 
                 {/* --- ITEM ENTRY --- */}
-                <fieldset className="mb-6 p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Add Items</legend>
+                {!isReadOnly && <fieldset className="mb-6 p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Add Items</legend>
                     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-end">
                         <div className="lg:col-span-2"><label>Product</label><select value={formSelections.selectedStockId} onChange={e => setFormSelections(prev => ({...prev, selectedStockId: e.target.value}))} className="w-full p-2 border rounded bg-white"><option value="">Select Product</option>{stockItems.map(s => <option key={s.id} value={s.id}>{s.name} - {s.model}</option>)}</select></div>
                         <div><label>Quantity</label><input type="number" value={formSelections.selectedQty} onChange={e => setFormSelections(prev => ({...prev, selectedQty: e.target.value}))} className="w-full p-2 border rounded"/></div>
                         <div><label>Unit Price (USD)</label><input type="number" step="0.01" value={formSelections.selectedUnitPrice} onChange={e => setFormSelections(prev => ({...prev, selectedUnitPrice: e.target.value}))} className="w-full p-2 border rounded"/></div>
                         <div><button onClick={handleAddItem} className="w-full bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Add Item</button></div>
                     </div>
-                </fieldset>
+                </fieldset>}
 
                 {/* --- COSTS --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <fieldset className="p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Costs (USD)</legend><div className="grid grid-cols-2 gap-4">{['fob', 'freight', 'handlingOverseas', 'insurance'].map(k => <div key={k}><label className="capitalize text-sm">{k.replace('O',' O')}</label><input type="number" step="0.01" name={k} value={formData.costsUSD[k]} onChange={(e) => handleInputChange(e, 'costsUSD')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
-                    <fieldset className="p-4 border rounded-md" disabled={isCalculated}><legend className="font-semibold px-2">Costs (LKR)</legend><div className="grid grid-cols-2 gap-4">{['bank', 'duty', 'vat', 'clearing', 'transport', 'unload', 'others'].map(k => <div key={k}><label className="capitalize text-sm">{k}</label><input type="number" step="0.01" name={k} value={formData.costsLKR[k]} onChange={(e) => handleInputChange(e, 'costsLKR')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
+                    <fieldset className="p-4 border rounded-md" disabled={isReadOnly || isCalculated}><legend className="font-semibold px-2">Costs (USD)</legend><div className="grid grid-cols-2 gap-4">{['fob', 'freight', 'handlingOverseas', 'insurance'].map(k => <div key={k}><label className="capitalize text-sm">{k.replace('O',' O')}</label><input type="number" step="0.01" name={k} value={formData.costsUSD[k]} onChange={(e) => handleInputChange(e, 'costsUSD')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
+                    <fieldset className="p-4 border rounded-md" disabled={isReadOnly || isCalculated}><legend className="font-semibold px-2">Costs (LKR)</legend><div className="grid grid-cols-2 gap-4">{['bank', 'duty', 'vat', 'clearing', 'transport', 'unload', 'others'].map(k => <div key={k}><label className="capitalize text-sm">{k}</label><input type="number" step="0.01" name={k} value={formData.costsLKR[k]} onChange={(e) => handleInputChange(e, 'costsLKR')} className="w-full p-2 border rounded"/></div>)}</div></fieldset>
                 </div>
 
                 {/* --- ITEMS TABLE --- */}
@@ -1110,16 +1170,22 @@ const ImportManagementPortal = () => {
                             <td className="px-4 py-2">{item.name}</td><td className="px-4 py-2">{item.qty}</td><td className="px-4 py-2">{item.unitPriceUSD.toFixed(2)}</td>
                             <td className="px-4 py-2">{(item.unitPriceUSD * item.qty).toFixed(2)}</td>
                             <td className="px-4 py-2 font-semibold">{item.finalUnitPriceLKR ? item.finalUnitPriceLKR.toFixed(2) : 'N/A'}</td>
-                             <td className="px-4 py-2">{isCalculated ? <span className="text-sm text-gray-500">{item.qty} serials will be generated on save</span> : 'N/A'}</td>
+                             <td className="px-4 py-2">
+                                {isReadOnly && item.serials?.length > 0 ? (
+                                     <select className="w-full p-1 border rounded bg-white text-sm"><option>{item.serials.length} serials</option>{item.serials.map(s => <option key={s} disabled>{s}</option>)}</select>
+                                ) : (
+                                    <span className="text-sm text-gray-500">{item.qty} serials will be generated</span>
+                                )}
+                             </td>
                         </tr>))}</tbody>
                     </table>
                 </div>
 
                 {/* --- ACTION BUTTONS --- */}
-                <div className="flex justify-end space-x-4">
+                {!isReadOnly && <div className="flex justify-end space-x-4">
                     {isCalculated && <button onClick={() => setIsCalculated(false)} className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">Edit</button>}
                     <button onClick={handleCalculate} disabled={isCalculated} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">Calculate Final Prices</button>
-                </div>
+                </div>}
             </div>
         );
     }
@@ -1132,11 +1198,12 @@ const ImportManagementPortal = () => {
                     <PlusCircleIcon/> Create Import
                 </button>
             </div>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-                <table className="min-w-full">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b"><input type="text" placeholder="Search by Invoice # or Supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                <div className="overflow-x-auto"><table className="min-w-full">
                     <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Invoice #</th><th className="px-5 py-3 text-left">Supplier</th><th className="px-5 py-3 text-left">Date</th><th className="px-5 py-3 text-left">Items</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                     <tbody>
-                        {imports.map(imp => {
+                        {filteredImports.map(imp => {
                             const supplier = suppliers.find(s => s.id === imp.supplierId);
                             return (
                                 <tr key={imp.id} className="border-b hover:bg-gray-50">
@@ -1145,14 +1212,13 @@ const ImportManagementPortal = () => {
                                     <td className="px-5 py-4 text-sm">{imp.createdAt?.toDate().toLocaleDateString()}</td>
                                     <td className="px-5 py-4 text-sm">{imp.items.length}</td>
                                     <td className="px-5 py-4 text-center">
-                                        {/* Future actions like 'View Details' can be added here */}
-                                        <button className="text-blue-600 hover:text-blue-900 text-sm">View</button>
+                                        <button onClick={() => handleViewImport(imp)} className="text-blue-600 hover:text-blue-900 text-sm">View</button>
                                     </td>
                                 </tr>
                             );
                         })}
                     </tbody>
-                </table>
+                </table></div>
             </div>
         </div>
     );
@@ -1236,7 +1302,7 @@ const Dashboard = ({ user, onSignOut }) => {
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportPortal />;
-            case 'import_management': return <ImportManagementPortal />;
+            case 'import_management': return <ImportManagementPortal currentUser={user} />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement />;
             case 'import_shop_management': return <ShopManagement />;
