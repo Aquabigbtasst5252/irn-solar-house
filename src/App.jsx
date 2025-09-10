@@ -194,7 +194,7 @@ const ForgotPassword = ({ setView }) => {
       try {
         await sendPasswordResetEmail(auth, email.value);
         setMessage("Password reset email sent! Please check your inbox.");
-      } catch (err) => {
+      } catch (err) {
         setError("Failed to send reset email. Please check the address.");
       }
     };
