@@ -31,6 +31,8 @@ import {
     getDownloadURL,
     deleteObject
 } from 'firebase/storage';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- Firebase Configuration ---
 const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.appspot.com","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
@@ -1529,15 +1531,6 @@ const ProductManagement = ({ currentUser }) => {
         item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
     );
 
-    const loadScript = (src) => new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) return resolve();
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`Script load error for ${src}`));
-        document.head.appendChild(script);
-    });
-
     const exportCostSheetPDF = async (product) => {
         if (!['super_admin', 'admin'].includes(currentUser.role)) {
             alert("You don't have permission to export cost sheets.");
@@ -1545,12 +1538,6 @@ const ProductManagement = ({ currentUser }) => {
         }
 
         try {
-            await Promise.all([
-                loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"),
-                loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.umd.min.js")
-            ]);
-            
-            const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
             doc.setFontSize(18);
@@ -1568,7 +1555,7 @@ const ProductManagement = ({ currentUser }) => {
                 `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
             ]);
 
-            doc.autoTable({
+            autoTable(doc, {
                 startY: 40,
                 head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
                 body: itemData,
@@ -1576,7 +1563,6 @@ const ProductManagement = ({ currentUser }) => {
                 headStyles: { fillColor: [22, 160, 133] }
             });
 
-            const finalY = doc.autoTable.previous.finalY;
             const costData = [
                 ['Raw Material Cost', `LKR ${product.costBreakdown.rawMaterialCost.toFixed(2)}`],
                 [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
@@ -1585,14 +1571,14 @@ const ProductManagement = ({ currentUser }) => {
                 [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
                 [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
             ];
-             doc.autoTable({
-                startY: finalY + 10,
+             autoTable(doc, {
+                startY: (doc).autoTable.previous.finalY + 10,
                 head: [['Cost Component', 'Amount']],
                 body: costData,
                 theme: 'grid',
             });
 
-            const secondFinalY = doc.autoTable.previous.finalY;
+            const secondFinalY = (doc).autoTable.previous.finalY;
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text('Total Production Cost:', 14, secondFinalY + 10);
@@ -1940,4 +1926,3 @@ export default function App() {
 
   return (<div className="font-sans">{renderContent()}</div>);
 }
-
