@@ -649,9 +649,13 @@ const StockManagement = ({ onViewImport }) => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [searchTerm, setSearchTerm] = useState("");
 
+    // State for modals
     const [isSerialsModalOpen, setIsSerialsModalOpen] = useState(false);
+    const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
     const [serialsData, setSerialsData] = useState({ stockItemId: '', itemName: '', serials: [] });
-    const [serialsLoading, setSerialsLoading] = useState(false);
+    const [breakdownData, setBreakdownData] = useState({ itemName: '', breakdown: {} });
+    const [modalLoading, setModalLoading] = useState(false);
+
 
     const openAddModal = () => { setIsEditing(false); setFormData({ qty: 0 }); setIsModalOpen(true); };
     const openEditModal = (item) => { setIsEditing(true); setFormData(item); setIsModalOpen(true); };
@@ -737,7 +741,7 @@ const StockManagement = ({ onViewImport }) => {
     };
 
     const viewSerials = async (item) => {
-        setSerialsLoading(true);
+        setModalLoading(true);
         setIsSerialsModalOpen(true);
         setSerialsData({ stockItemId: item.id, itemName: item.name, serials: [] });
         try {
@@ -749,7 +753,32 @@ const StockManagement = ({ onViewImport }) => {
             console.error("Failed to fetch serial numbers:", err);
             setError("Could not fetch serial numbers for this item.");
         } finally {
-            setSerialsLoading(false);
+            setModalLoading(false);
+        }
+    };
+    
+    // New function to view stock breakdown by shop
+    const viewBreakdown = async (item) => {
+        setModalLoading(true);
+        setIsBreakdownModalOpen(true);
+        setBreakdownData({ itemName: item.name, breakdown: {} });
+        try {
+            const serialsColRef = collection(db, 'import_stock', item.id, 'serials');
+            const querySnapshot = await getDocs(serialsColRef);
+            
+            const breakdown = querySnapshot.docs.reduce((acc, doc) => {
+                const shopId = doc.data().assignedShopId || 'unassigned';
+                acc[shopId] = (acc[shopId] || 0) + 1;
+                return acc;
+            }, {});
+            
+            setBreakdownData({ itemName: item.name, breakdown });
+
+        } catch (err) {
+            console.error("Failed to calculate breakdown:", err);
+            setError("Could not calculate stock breakdown.");
+        } finally {
+            setModalLoading(false);
         }
     };
 
@@ -780,15 +809,32 @@ const StockManagement = ({ onViewImport }) => {
 
     return (
         <div className="p-4 sm:p-8">
-             <Modal isOpen={isSerialsModalOpen} onClose={() => setIsSerialsModalOpen(false)} size="4xl">
+             <Modal isOpen={isBreakdownModalOpen} onClose={() => setIsBreakdownModalOpen(false)} size="lg">
+                 <h3 className="text-xl font-bold mb-4">Stock Breakdown for {breakdownData.itemName}</h3>
+                 {modalLoading ? <p>Calculating...</p> : (
+                    <ul className="divide-y divide-gray-200">
+                        {Object.entries(breakdownData.breakdown).map(([shopId, count]) => {
+                            const shop = shops.find(s => s.id === shopId);
+                            const shopName = shop ? shop.name : 'Unassigned (Warehouse)';
+                            return (
+                                <li key={shopId} className="py-3 flex justify-between items-center">
+                                    <span className="text-gray-700">{shopName}</span>
+                                    <span className="font-semibold text-gray-800">{count} units</span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                 )}
+            </Modal>
+             <Modal isOpen={isSerialsModalOpen} onClose={() => setIsSerialsModalOpen(false)} size="6xl">
                 <h3 className="text-xl font-bold mb-4">Serial Numbers for {serialsData.itemName}</h3>
-                {serialsLoading ? <p>Loading serials...</p> : (
+                {modalLoading ? <p>Loading serials...</p> : (
                     <div className="max-h-[60vh] overflow-y-auto">
                         {serialsData.serials.length > 0 ? (
                             <table className="min-w-full">
                                 <thead className="bg-gray-100 sticky top-0"><tr>
                                     <th className="px-4 py-2 text-left">Serial Number</th>
-                                    <th className="px-4 py-2 text-left">Invoice #</th>
+                                    <th className="px-4 py-2 text-left">Invoice # / Supplier</th>
                                     <th className="px-4 py-2 text-left">Received Date</th>
                                     <th className="px-4 py-2 text-left">Unit Price (LKR)</th>
                                     <th className="px-4 py-2 text-left">Assigned Shop</th>
@@ -798,9 +844,10 @@ const StockManagement = ({ onViewImport }) => {
                                         <tr key={serial.id} className="border-b">
                                             <td className="px-4 py-2 font-mono">{serial.id}</td>
                                             <td className="px-4 py-2">
-                                                <button onClick={() => { onViewImport(serial.importInvoiceNo); setIsSerialsModalOpen(false); }} className="text-blue-600 hover:underline">
+                                                <button onClick={() => { onViewImport(serial.importInvoiceNo); setIsSerialsModalOpen(false); }} className="text-blue-600 hover:underline block">
                                                     {serial.importInvoiceNo}
                                                 </button>
+                                                <span className="text-xs text-gray-500">{serial.supplierName}</span>
                                             </td>
                                             <td className="px-4 py-2">{serial.purchaseDate?.toDate().toLocaleDateString()}</td>
                                             <td className="px-4 py-2">{serial.finalCostLKR?.toFixed(2)}</td>
@@ -830,8 +877,7 @@ const StockManagement = ({ onViewImport }) => {
                             <div><label>Item Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
                             <div><label>Model</label><input type="text" name="model" value={formData.model || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
                             <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description || ''} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea></div>
-                            <div><label>Supplier</label><input type="text" name="supplier" value={formData.supplier || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
-                             <div><label>Unit of Measure</label><select name="uom" value={formData.uom || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="">Select</option>{unitsOfMeasure.map(u=><option key={u} value={u}>{u}</option>)}</select></div>
+                            <div><label>Unit of Measure</label><select name="uom" value={formData.uom || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="">Select</option>{unitsOfMeasure.map(u=><option key={u} value={u}>{u}</option>)}</select></div>
                         </div>
                     </fieldset>
                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Specifications</legend>
@@ -855,11 +901,12 @@ const StockManagement = ({ onViewImport }) => {
             <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Stock Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Item</button></div>
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by item name or model..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                     <tbody>{filteredStock.map(item => (<tr key={item.id} className="border-b hover:bg-gray-50">
                         <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className="font-semibold">{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
                         <td className="px-5 py-4 text-sm font-semibold">{item.qty} {item.uom}</td>
                         <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
+                            <button onClick={() => viewBreakdown(item)} className="text-green-600 hover:text-green-900 text-sm font-medium">View Breakdown</button>
                             <button onClick={() => viewSerials(item)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Serials</button>
                             <button onClick={() => openEditModal(item)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
                             <button onClick={() => handleDelete(item)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
@@ -1137,6 +1184,7 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
         try {
             const batch = writeBatch(db);
             const itemsWithSerials = [];
+            const supplier = suppliers.find(s => s.id === formData.supplierId);
 
             for (const item of formData.items) {
                 const serialsColRef = collection(db, 'import_stock', item.stockItemId, 'serials');
@@ -1169,7 +1217,8 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
                         importInvoiceNo: formData.invoiceNo,
                         purchaseDate: Timestamp.now(),
                         finalCostLKR: item.finalUnitPriceLKR,
-                        assignedShopId: '', // Initialize as unassigned
+                        assignedShopId: '',
+                        supplierName: supplier?.companyName || 'N/A',
                     });
                 }
             }
@@ -1201,9 +1250,11 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
                     batch.update(stockDocRef, { qty: Math.max(0, currentQty - item.qty) });
                 }
 
-                for (const serialNo of item.serials) {
-                    const serialDocRef = doc(db, 'import_stock', item.stockItemId, 'serials', serialNo);
-                    batch.delete(serialDocRef);
+                if (item.serials && item.serials.length > 0) {
+                    for (const serialNo of item.serials) {
+                        const serialDocRef = doc(db, 'import_stock', item.stockItemId, 'serials', serialNo);
+                        batch.delete(serialDocRef);
+                    }
                 }
             }
 
