@@ -1,10 +1,643 @@
-// The top of the file (imports, Firebase config, helpers, etc.) is unchanged.
-// The Auth components (SignIn, ForgotPassword) are unchanged.
-// The Management components (User, Customer, Shop, Supplier) are unchanged.
-// The ONLY components with changes are StockManagement and ImportManagementPortal.
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  Timestamp,
+  writeBatch
+} from 'firebase/firestore';
+import {
+    getStorage,
+    ref,
+    uploadBytesResumable,
+    getDownloadURL,
+    deleteObject
+} from 'firebase/storage';
 
-// ... (All previous components from UserManagementPortal upwards are the same)
+// --- Firebase Configuration ---
+const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.appspot.com","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
 
+let firebaseApp, auth, db, storage;
+try {
+  const firebaseConfig = JSON.parse(firebaseConfigString);
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+  storage = getStorage(firebaseApp);
+} catch (error) { console.error("Error initializing Firebase:", error); }
+
+// --- Helper Functions & Data ---
+const getUserProfile = async (uid) => {
+  if (!db) return null;
+  const userDocRef = doc(db, 'users', uid);
+  const userDocSnap = await getDoc(userDocRef);
+  if (userDocSnap.exists()) {
+    return userDocSnap.data();
+  }
+  return null;
+};
+const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
+const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
+const ShieldCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286zm0 13.036h.008v.008h-.008v-.008z" /></svg>;
+const ChevronDownIcon = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${className}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>;
+const PencilIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
+const PlusCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>;
+const unitsOfMeasure = ["pieces (pcs)", "sets", "units", "meters (m)", "kilograms (kg)", "liters (L)"];
+
+// --- Reusable Components ---
+const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
+    if (!isOpen) return null;
+    const sizeClasses = {
+        'md': 'max-w-md',
+        'lg': 'max-w-lg',
+        'xl': 'max-w-xl',
+        '2xl': 'max-w-2xl',
+        '4xl': 'max-w-4xl',
+        '6xl': 'max-w-6xl'
+    };
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
+        <div className={`bg-white rounded-lg shadow-xl p-6 w-full ${sizeClasses[size]} relative max-h-[90vh] overflow-y-auto`}>
+            <button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 text-3xl leading-none">×</button>
+            {children}
+        </div>
+      </div>
+    );
+};
+const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
+  <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+    <div className="flex flex-col items-center">
+      <img
+        src="https://i.imgur.com/VtqESiF.png"
+        alt="IRN Solar House Logo"
+        className="h-24 w-auto mb-4"
+      />
+      <h2 className="text-3xl font-bold text-center text-gray-800">{title}</h2>
+    </div>
+
+    <form className="space-y-6" onSubmit={onSubmit}>
+      {fields.map(field => (
+        <div key={field.id}>
+          <label htmlFor={field.id} className="text-sm font-medium text-gray-700">
+            {field.label}
+          </label>
+          <input
+            id={field.id}
+            name={field.id}
+            type={field.type}
+            required={field.required}
+            className="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder={field.placeholder}
+          />
+        </div>
+      ))}
+
+      {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
+      <div>
+        <button
+          type="submit"
+          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          {buttonText}
+        </button>
+      </div>
+    </form>
+    {children}
+  </div>
+);
+const SignIn = ({ setView, onLoginSuccess }) => {
+  const [error, setError] = useState('');
+
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+    const { email, password } = e.target.elements;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.value, password.value);
+      const userProfile = await getUserProfile(userCredential.user.uid);
+      onLoginSuccess(userProfile);
+    } catch (err) {
+      console.error("Sign-in error:", err);
+      setError(err.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        let userProfile = await getUserProfile(user.uid);
+
+        if (!userProfile) {
+            const newUserProfile = {
+                email: user.email,
+                displayName: user.displayName,
+                role: 'pending',
+                createdAt: Timestamp.now(),
+            };
+            await setDoc(doc(db, 'users', user.uid), newUserProfile);
+            userProfile = newUserProfile;
+        }
+        onLoginSuccess(userProfile);
+    } catch (err) {
+        console.error("Google sign-in error:", err);
+        setError(err.message);
+    }
+  };
+
+  return (
+    <AuthForm
+      title="Staff Sign In"
+      fields={[
+        { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
+        { id: 'password', label: 'Password', type: 'password', required: true, placeholder: '••••••••' },
+      ]}
+      buttonText="Sign In"
+      onSubmit={handleSignIn}
+      error={error}
+    >
+        <div className="relative my-4"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Or</span></div></div>
+        <div><button type="button" onClick={handleGoogleSignIn} className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">Sign in with Google</button></div>
+        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('forgot-password')} className="font-medium text-blue-600 hover:text-blue-500">Forgot password?</a></div>
+        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('homepage')} className="font-medium text-gray-600 hover:text-gray-500">← Back to Homepage</a></div>
+    </AuthForm>
+  );
+};
+const ForgotPassword = ({ setView }) => {
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+    const handlePasswordReset = async (e) => {
+      e.preventDefault();
+      const { email } = e.target.elements;
+      setError('');
+      setMessage('');
+      try {
+        await sendPasswordResetEmail(auth, email.value);
+        setMessage("Password reset email sent! Please check your inbox.");
+      } catch (err) {
+        setError("Failed to send reset email. Please check the address.");
+      }
+    };
+
+    return (
+      <AuthForm
+        title="Reset Your Password"
+        fields={[{ id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' }]}
+        buttonText="Send Reset Link"
+        onSubmit={handlePasswordReset}
+        error={error}
+      >
+        {message && <p className="text-sm text-green-600 text-center">{message}</p>}
+        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('signin')} className="font-medium text-blue-600 hover:text-blue-500">Back to Sign In</a></div>
+      </AuthForm>
+    );
+};
+
+// --- Portal Components ---
+const UserManagementPortal = ({ currentUser }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [userToDelete, setUserToDelete] = useState(null);
+
+    const fetchUsers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const usersCollectionRef = collection(db, 'users');
+            const querySnapshot = await getDocs(usersCollectionRef);
+            const usersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setUsers(usersList);
+        } catch (err) {
+            setError('Failed to fetch users. You may not have permission.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+    const handleRoleChange = async (userId, newRole) => {
+        try {
+            await updateDoc(doc(db, 'users', userId), { role: newRole });
+            setUsers(prevUsers => prevUsers.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        } catch (err) { setError('Failed to update role.'); }
+    };
+
+    const handleDeleteUser = async () => {
+        if (!userToDelete) return;
+        try {
+            await deleteDoc(doc(db, 'users', userToDelete.id));
+            setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
+            setUserToDelete(null);
+        } catch (err) {
+            setError('Failed to delete user data.');
+            setUserToDelete(null);
+        }
+    };
+
+    const filteredUsers = users.filter(user =>
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.displayName && user.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    const userStats = {
+        total: users.length,
+        admins: users.filter(u => u.role === 'admin').length,
+        superAdmins: users.filter(u => u.role === 'super_admin').length,
+        pending: users.filter(u => u.role === 'pending').length,
+    };
+
+    if (loading) return <div className="text-center p-10">Loading...</div>;
+    if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={!!userToDelete} onClose={() => setUserToDelete(null)}>
+                 <div className="p-2">
+                    <h3 className="text-lg font-bold text-gray-900">Delete User</h3>
+                    <p className="mt-2 text-sm text-gray-600">Are you sure you want to delete the user record for {userToDelete?.email}? This action only removes their data record.</p>
+                    <div className="mt-6 flex justify-end space-x-3">
+                        <button onClick={() => setUserToDelete(null)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button onClick={handleDeleteUser} className="px-4 py-2 text-white rounded-md bg-red-600 hover:bg-red-700">Delete</button>
+                    </div>
+                 </div>
+            </Modal>
+
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">User Management</h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-sm font-medium text-gray-500">Total Users</p><p className="text-3xl font-bold text-gray-800">{userStats.total}</p></div>
+                <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-sm font-medium text-gray-500">Super Admins</p><p className="text-3xl font-bold text-red-600">{userStats.superAdmins}</p></div>
+                <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-sm font-medium text-gray-500">Admins</p><p className="text-3xl font-bold text-green-600">{userStats.admins}</p></div>
+                <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-sm font-medium text-gray-500">Pending</p><p className="text-3xl font-bold text-yellow-600">{userStats.pending}</p></div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b"><input type="text" placeholder="Search by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full leading-normal">
+                        <thead><tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm"><th className="px-5 py-3">User</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Role</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                        <tbody>
+                            {filteredUsers.map(user => (
+                                <tr key={user.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{user.displayName || 'N/A'}</p></td>
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{user.email}</p></td>
+                                    <td className="px-5 py-4 text-sm bg-white"><span className={`relative inline-block px-3 py-1 font-semibold leading-tight rounded-full ${user.role === 'super_admin' ? 'text-red-900 bg-red-200' : user.role === 'admin' ? 'text-green-900 bg-green-200' : 'text-gray-700 bg-gray-200'}`}><span className="relative">{user.role}</span></span></td>
+                                    <td className="px-5 py-4 text-sm bg-white text-center">
+                                        {user.id !== currentUser.uid ? (
+                                            <div className="flex items-center justify-center space-x-2">
+                                                <select value={user.role} onChange={(e) => handleRoleChange(user.id, e.target.value)} className="w-48 bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none" disabled={currentUser.role !== 'super_admin' && user.role === 'super_admin'}>
+                                                    <option value="pending">pending</option>
+                                                    {currentUser.role === 'super_admin' && <option value="super_admin">super_admin</option>}
+                                                    <option value="admin">admin</option>
+                                                    <option value="shop_worker_import">shop_worker_import</option>
+                                                    <option value="shop_worker_export">shop_worker_export</option>
+                                                </select>
+                                                {currentUser.role === 'super_admin' && <button onClick={() => setUserToDelete(user)} className="text-red-600 hover:text-red-900"><TrashIcon /></button>}
+                                            </div>
+                                        ) : (<span className="text-xs text-gray-500">Cannot edit self</span>)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+const CustomerManagement = ({ portalType }) => {
+    const isImport = portalType === 'import';
+    const collectionName = isImport ? 'import_customers' : 'export_customers';
+    const portalTitle = isImport ? 'Import Customer Management' : 'Export Customer Management';
+
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({});
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const openMapSelector = () => {
+        const mapWindow = window.open("", "mapSelector", "width=800,height=600,resizable=yes,scrollbars=yes");
+        const mapHtml = `
+            <!DOCTYPE html><html><head><title>Select Location</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /><style>body, html { margin: 0; padding: 0; height: 100%; } #map { height: 100%; }</style></head>
+            <body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            <script>
+                const map = L.map('map').setView([7.9, 80.7], 8);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+                let marker;
+                map.on('click', function(e) {
+                    const { lat, lng } = e.latlng;
+                    if(marker) { marker.setLatLng(e.latlng); } else { marker = L.marker(e.latlng).addTo(map); }
+                    if (window.opener) {
+                        window.opener.postMessage({ type: 'mapCoords', lat: lat.toFixed(6), lng: lng.toFixed(6) }, "*");
+                    }
+                });
+            </script></body></html>`;
+        mapWindow.document.write(mapHtml);
+        mapWindow.document.close();
+    };
+
+    useEffect(() => {
+        const handleMapMessage = (event) => {
+            if (event.data.type === 'mapCoords') {
+                setFormData(prev => ({ ...prev, latitude: event.data.lat, longitude: event.data.lng }));
+            }
+        };
+        window.addEventListener('message', handleMapMessage);
+        return () => window.removeEventListener('message', handleMapMessage);
+    }, []);
+
+
+    const fetchCustomers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, collectionName));
+            const customersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCustomers(customersList);
+        } catch (err) { setError(`Failed to fetch customers. Please check Firestore rules for '${collectionName}'.`); }
+        finally { setLoading(false); }
+    }, [collectionName]);
+
+    useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                const docRef = doc(db, collectionName, formData.id);
+                await updateDoc(docRef, formData);
+                setCustomers(prev => prev.map(c => c.id === formData.id ? formData : c));
+            } else {
+                const dataToSave = { ...formData, registerDate: Timestamp.now() };
+                const newDocRef = await addDoc(collection(db, collectionName), dataToSave);
+                setCustomers(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
+            }
+            setIsModalOpen(false);
+        } catch (err) {
+            setError('Failed to save customer data.');
+            console.error(err);
+        }
+    };
+
+    const openAddModal = () => {
+        setIsEditing(false);
+        setFormData({ country: isImport ? 'Sri Lanka' : '' });
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (customer) => {
+        setIsEditing(true);
+        setFormData(customer);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = async (customerId) => {
+        if (window.confirm('Are you sure you want to delete this customer?')) {
+            try {
+                await deleteDoc(doc(db, collectionName, customerId));
+                setCustomers(prev => prev.filter(c => c.id !== customerId));
+            } catch (err) { setError('Failed to delete customer.'); }
+        }
+    };
+
+    const filteredCustomers = customers.filter(c =>
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.telephone?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (loading) return <div className="text-center p-10">Loading Customers...</div>;
+    if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Customer' : 'Add New Customer'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    <div><label className="block text-sm font-medium text-gray-700">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    {!isImport && (<>
+                        <div><label className="block text-sm font-medium text-gray-700">Company Name (optional)</label><input type="text" name="companyName" value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div><label className="block text-sm font-medium text-gray-700">Country</label><select name="country" required value={formData.country || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"><option value="">Select a country</option>{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </>)}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Latitude</label><input type="number" step="any" name="latitude" value={formData.latitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Longitude</label><input type="number" step="any" name="longitude" value={formData.longitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-1"><button type="button" onClick={openMapSelector} className="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Select on Map</button></div>
+                    </div>
+                    <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Customer'}</button></div>
+                </form>
+            </Modal>
+
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">{portalTitle}</h2>
+                <button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Customer</button>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b"><input type="text" placeholder="Search by name, email, or phone..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full leading-normal">
+                         <thead><tr className="bg-gray-100 text-left text-gray-600 uppercase text-sm"><th className="px-5 py-3">Name</th><th className="px-5 py-3">Contact</th>{!isImport && <th className="px-5 py-3">Country</th>}<th className="px-5 py-3">Location</th><th className="px-5 py-3">Registered</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                        <tbody>
+                            {filteredCustomers.map(customer => (
+                                <tr key={customer.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.name}</p>{!isImport && customer.companyName && <p className="text-gray-600 text-xs whitespace-no-wrap">{customer.companyName}</p>}</td>
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.email}</p><p className="text-gray-600 whitespace-no-wrap">{customer.telephone}</p></td>
+                                    {!isImport && <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.country}</p></td>}
+                                    <td className="px-5 py-4 text-sm bg-white">{customer.latitude && customer.longitude ? (<a href={`https://www.google.com/maps/search/?api=1&query=${customer.latitude},${customer.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center"><MapPinIcon /> View</a>) : ('N/A')}</td>
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.registerDate?.toDate().toLocaleDateString()}</p></td>
+                                    <td className="px-5 py-4 text-sm bg-white text-center">
+                                        <div className="flex items-center justify-center space-x-3">
+                                            <button onClick={() => openEditModal(customer)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                            <button onClick={() => handleDelete(customer.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+const ShopManagement = ({ currentUser }) => {
+    const [shops, setShops] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({ workers: [] });
+    // New state for viewing workers
+    const [isWorkersModalOpen, setIsWorkersModalOpen] = useState(false);
+    const [selectedShopForWorkers, setSelectedShopForWorkers] = useState(null);
+
+    const fetchShops = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'shops'));
+            setShops(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), workers: doc.data().workers || [] })));
+        } catch (err) { setError("Failed to fetch shops."); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { fetchShops(); }, [fetchShops]);
+
+    const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+    const handleWorkerChange = (index, e) => {
+        const updatedWorkers = [...formData.workers];
+        updatedWorkers[index][e.target.name] = e.target.value;
+        setFormData(prev => ({ ...prev, workers: updatedWorkers }));
+    };
+
+    const addWorker = () => {
+        setFormData(prev => ({ ...prev, workers: [...(prev.workers || []), { name: '', telephone: '', employeeNumber: '', role: '' }] }));
+    };
+
+    const removeWorker = (index) => {
+        const updatedWorkers = [...formData.workers];
+        updatedWorkers.splice(index, 1);
+        setFormData(prev => ({ ...prev, workers: updatedWorkers }));
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                await updateDoc(doc(db, 'shops', formData.id), formData);
+                setShops(prev => prev.map(s => s.id === formData.id ? formData : s));
+            } else {
+                const newDocRef = await addDoc(collection(db, 'shops'), formData);
+                setShops(prev => [...prev, {id: newDocRef.id, ...formData}]);
+            }
+            setIsModalOpen(false);
+        } catch (err) { setError("Failed to save shop details."); console.error(err) }
+    };
+
+    const openAddModal = () => { setIsEditing(false); setFormData({ workers: [] }); setIsModalOpen(true); };
+    const openEditModal = (shop) => { setIsEditing(true); setFormData(shop); setIsModalOpen(true); };
+    const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this shop?')) {
+            try {
+                await deleteDoc(doc(db, 'shops', id));
+                setShops(prev => prev.filter(s => s.id !== id));
+            }
+            catch (err) { setError("Failed to delete shop."); }
+        }
+    };
+    
+    const openWorkersModal = (shop) => {
+        setSelectedShopForWorkers(shop);
+        setIsWorkersModalOpen(true);
+    };
+
+    if(loading) return <div className="p-8 text-center">Loading Shops...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isWorkersModalOpen} onClose={() => setIsWorkersModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">Worker Details for {selectedShopForWorkers?.name}</h3>
+                {selectedShopForWorkers?.workers?.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead className="bg-gray-100"><tr>
+                                <th className="px-4 py-2 text-left">Name</th>
+                                <th className="px-4 py-2 text-left">Telephone</th>
+                                <th className="px-4 py-2 text-left">Employee No.</th>
+                                <th className="px-4 py-2 text-left">Role</th>
+                            </tr></thead>
+                            <tbody>
+                                {selectedShopForWorkers.workers.map((worker, index) => (
+                                    <tr key={index} className="border-b">
+                                        <td className="px-4 py-2">{worker.name}</td>
+                                        <td className="px-4 py-2">{worker.telephone}</td>
+                                        <td className="px-4 py-2">{worker.employeeNumber}</td>
+                                        <td className="px-4 py-2">{worker.role}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : <p>No workers assigned to this shop.</p>}
+            </Modal>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="6xl">
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Shop' : 'Register New Shop'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium">Shop Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div><label className="block text-sm font-medium">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-2"><label className="block text-sm font-medium">Address</label><input type="text" name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div className="md:col-span-2"><label className="block text-sm font-medium">Email</label><input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                     </div>
+                     <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">Shop Workers</legend>
+                        <div className="space-y-3">
+                            {(formData.workers || []).map((worker, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-3 bg-gray-50 rounded-md relative">
+                                    <input type="text" name="name" placeholder="Name" value={worker.name} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="text" name="telephone" placeholder="Telephone" value={worker.telephone} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
+                                    <input type="text" name="employeeNumber" placeholder="Employee No." value={worker.employeeNumber} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
+                                    <input type="text" name="role" placeholder="Role" value={worker.role} onChange={(e) => handleWorkerChange(index, e)} className="p-2 border rounded"/>
+                                    <button type="button" onClick={() => removeWorker(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addWorker} className="mt-3 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Add Worker</button>
+                     </fieldset>
+                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Shop'}</button></div>
+                </form>
+            </Modal>
+            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Shop Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Shop</button></div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Name</th><th className="px-5 py-3 text-left">Contact</th><th className="px-5 py-3 text-left">Workers</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <tbody>{shops.map(shop => (<tr key={shop.id} className="border-b hover:bg-gray-50">
+                    <td className="px-5 py-4"><p className="font-semibold">{shop.name}</p><p className="text-sm text-gray-600">{shop.address}</p></td>
+                    <td className="px-5 py-4 text-sm"><p>{shop.telephone}</p><p>{shop.email}</p></td>
+                    <td className="px-5 py-4 text-sm">{shop.workers?.length || 0} assigned</td>
+                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3">
+                        <button onClick={() => openWorkersModal(shop)} className="text-gray-600 hover:text-gray-900 text-sm font-medium">View Workers</button>
+                        <button onClick={() => openEditModal(shop)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                        <button onClick={() => handleDelete(shop.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                        </div></td>
+                </tr>))}</tbody></table></div>
+        </div>
+    );
+};
 const StockManagement = ({ onViewImport }) => {
     const [stock, setStock] = useState([]);
     const [shops, setShops] = useState([]);
@@ -331,113 +964,6 @@ const StockManagement = ({ onViewImport }) => {
                 </table>
                 </div>
             </div>
-        </div>
-    );
-};
-
-const SupplierManagement = () => {
-    const [suppliers, setSuppliers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isEditing, setIsEditing] = useState(false);
-    const [formData, setFormData] = useState({ contactPersons: [] });
-
-    const fetchSuppliers = useCallback(async () => {
-        setLoading(true);
-        try {
-            const querySnapshot = await getDocs(collection(db, 'suppliers'));
-            setSuppliers(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), contactPersons: doc.data().contactPersons || [] })));
-        } catch (err) { setError("Failed to fetch suppliers."); }
-        finally { setLoading(false); }
-    }, []);
-
-    useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
-
-    const handleInputChange = e => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-
-    const handleContactChange = (index, e) => {
-        const updatedContacts = [...formData.contactPersons];
-        updatedContacts[index][e.target.name] = e.target.value;
-        setFormData(prev => ({ ...prev, contactPersons: updatedContacts }));
-    };
-
-    const addContact = () => {
-        setFormData(prev => ({ ...prev, contactPersons: [...(prev.contactPersons || []), { name: '', email: '', contactNumber: '' }] }));
-    };
-
-    const removeContact = (index) => {
-        const updatedContacts = [...formData.contactPersons];
-        updatedContacts.splice(index, 1);
-        setFormData(prev => ({ ...prev, contactPersons: updatedContacts }));
-    };
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            if (isEditing) {
-                await updateDoc(doc(db, 'suppliers', formData.id), formData);
-                setSuppliers(prev => prev.map(s => s.id === formData.id ? formData : s));
-            } else {
-                const newDocRef = await addDoc(collection(db, 'suppliers'), formData);
-                setSuppliers(prev => [...prev, {id: newDocRef.id, ...formData}]);
-            }
-            setIsModalOpen(false);
-        } catch (err) { setError("Failed to save supplier details."); console.error(err) }
-    };
-
-    const openAddModal = () => { setIsEditing(false); setFormData({ contactPersons: [] }); setIsModalOpen(true); };
-    const openEditModal = (supplier) => { setIsEditing(true); setFormData(supplier); setIsModalOpen(true); };
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this supplier?')) {
-            try {
-                await deleteDoc(doc(db, 'suppliers', id));
-                setSuppliers(prev => prev.filter(s => s.id !== id));
-            }
-            catch (err) { setError("Failed to delete supplier."); }
-        }
-    };
-
-    if(loading) return <div className="p-8 text-center">Loading Suppliers...</div>;
-    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    return (
-        <div className="p-4 sm:p-8">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="6xl">
-                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h3>
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label>Company Name</label><input type="text" name="companyName" required value={formData.companyName || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
-                        <div><label>Contact No</label><input type="tel" name="contactNo" required value={formData.contactNo || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
-                        <div className="md:col-span-2"><label>Address</label><input type="text" name="address" required value={formData.address || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
-                        <div><label>Currency</label><select name="currency" value={formData.currency || ''} onChange={handleInputChange} className="w-full p-2 border rounded bg-white"><option value="USD">USD</option><option value="LKR">LKR</option></select></div>
-                        <div className="md:col-span-2"><label>Notes</label><textarea name="notes" value={formData.notes || ''} onChange={handleInputChange} className="w-full p-2 border rounded"></textarea></div>
-                     </div>
-                     <fieldset className="border p-4 rounded-md">
-                        <legend className="font-semibold px-2">Contact Persons</legend>
-                        <div className="space-y-3">
-                            {(formData.contactPersons || []).map((person, index) => (
-                                <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 bg-gray-50 rounded-md relative">
-                                    <input type="text" name="name" placeholder="Name" value={person.name} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded md:col-span-2"/>
-                                    <input type="email" name="email" placeholder="Email" value={person.email} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
-                                    <input type="tel" name="contactNumber" placeholder="Contact No" value={person.contactNumber} onChange={(e) => handleContactChange(index, e)} className="p-2 border rounded"/>
-                                    <button type="button" onClick={() => removeContact(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
-                                </div>
-                            ))}
-                        </div>
-                        <button type="button" onClick={addContact} className="mt-3 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Add Contact</button>
-                     </fieldset>
-                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Supplier'}</button></div>
-                </form>
-            </Modal>
-            <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Supplier</button></div>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Company</th><th className="px-5 py-3 text-left">Contact</th><th className="px-5 py-3 text-left">Contacts</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
-                <tbody>{suppliers.map(supplier => (<tr key={supplier.id} className="border-b hover:bg-gray-50">
-                    <td className="px-5 py-4"><p className="font-semibold">{supplier.companyName}</p><p className="text-sm text-gray-600">{supplier.address}</p></td>
-                    <td className="px-5 py-4 text-sm"><p>{supplier.contactNo}</p><p>{supplier.currency}</p></td>
-                    <td className="px-5 py-4 text-sm">{supplier.contactPersons?.map(p => p.name).join(', ')}</td>
-                    <td className="px-5 py-4 text-center"><div className="flex justify-center space-x-3"><button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button><button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button></div></td>
-                </tr>))}</tbody></table></div>
         </div>
     );
 };
@@ -812,7 +1338,7 @@ const HomePage = ({ onSignInClick }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-24 w-auto"/>
+                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
                     </div>
                     <div className="hidden md:flex items-center space-x-6"><a href="#products" className="hover:text-yellow-600">Products</a><a href="#services" className="hover:text-yellow-600">Services</a><a href="#about" className="hover:text-yellow-600">About Us</a><a href="#contact" className="hover:text-yellow-600">Contact</a></div>
@@ -908,7 +1434,7 @@ const Dashboard = ({ user, onSignOut }) => {
         }
     };
 
-    if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-24 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
+    if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
 
     const NavLink = ({ view, children }) => {
         const isActive = currentView === view;
@@ -921,7 +1447,7 @@ const Dashboard = ({ user, onSignOut }) => {
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-6">
                     <div className="flex justify-between items-center py-4">
-                        <div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-24 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
+                        <div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
                         <div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
