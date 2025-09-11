@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://irn-solar-house.vercel.app", "http://localhost:5173"],
+    "method": ["GET", "PUT", "POST", "DELETE"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "access-control-allow-origin"]
+  }
+]
