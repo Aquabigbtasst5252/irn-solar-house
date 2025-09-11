@@ -20,7 +20,9 @@ import {
   deleteDoc,
   addDoc,
   Timestamp,
-  writeBatch
+  writeBatch,
+  query,
+  orderBy
 } from 'firebase/firestore';
 import {
     getStorage,
@@ -61,6 +63,7 @@ const PencilIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 const PlusCircleIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>;
+const DocumentTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v2a1 1 0 102 0v-2zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" /></svg>;
 const unitsOfMeasure = ["pieces (pcs)", "sets", "units", "meters (m)", "kilograms (kg)", "liters (L)"];
 
 // --- Reusable Components ---
@@ -936,7 +939,7 @@ const StockManagement = ({ onViewImport }) => {
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by item name or model..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
                 <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-left">Status</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
-                    <tbody>{filteredStock.map(item => {
+                    <tbody>{stock.map(item => {
                         const atReorderLevel = item.reorderLevel && (item.qty <= item.reorderLevel);
                         return (
                         <tr key={item.id} className={`border-b hover:bg-gray-100 ${atReorderLevel ? 'bg-red-50' : ''}`}>
@@ -1330,8 +1333,427 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
         </div>
     );
 };
+// ====================================================================================
+// --- NEW PRODUCT MANAGEMENT COMPONENT ---
+// ====================================================================================
+const ProductManagement = ({ currentUser }) => {
+    const [view, setView] = useState('list'); // 'list', 'form'
+    const [products, setProducts] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+    const [stockSearchTerm, setStockSearchTerm] = useState('');
+    const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
+    const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
+
+    const initialFormData = {
+        name: '',
+        description: '',
+        serialNumber: '',
+        items: [],
+        costing: {
+            employeeSalary: 0,
+            delivery: 0,
+            commission: 0,
+            serviceCharge: 0,
+            rent: 0,
+            profit: 10,
+        },
+    };
+    const [formData, setFormData] = useState(initialFormData);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [productsSnap, stockSnap] = await Promise.all([
+                getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc'))),
+                getDocs(collection(db, 'import_stock')),
+            ]);
+            setProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            
+            // Fetch the latest serial cost for each stock item as its average cost
+            const stockItemsWithCost = await Promise.all(stockSnap.docs.map(async (doc) => {
+                const item = { id: doc.id, ...doc.data() };
+                const serialsQuery = query(collection(db, 'import_stock', item.id, 'serials'), orderBy('purchaseDate', 'desc'));
+                const serialsSnap = await getDocs(serialsQuery);
+                const latestSerial = serialsSnap.docs[0]?.data();
+                return { ...item, avgCostLKR: latestSerial?.finalCostLKR || 0 };
+            }));
+
+            setStockItems(stockItemsWithCost);
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load product data.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleCreateNew = () => {
+        setIsEditing(false);
+        setFormData({
+            ...initialFormData,
+            serialNumber: `PROD-${Date.now().toString().slice(-8)}`,
+        });
+        setView('form');
+    };
+
+    const handleEdit = (product) => {
+        setIsEditing(true);
+        setFormData(product);
+        setView('form');
+    };
+
+    const handleDelete = async (productId) => {
+        if (currentUser.role !== 'super_admin') {
+            alert("You don't have permission to delete products.");
+            return;
+        }
+        if (window.confirm('Are you sure you want to delete this product definition?')) {
+            try {
+                await deleteDoc(doc(db, 'products', productId));
+                setProducts(prev => prev.filter(p => p.id !== productId));
+            } catch (err) {
+                console.error(err);
+                setError('Failed to delete product.');
+            }
+        }
+    };
+    
+    const handleFormInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleCostingChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            costing: { ...prev.costing, [name]: parseFloat(value) || 0 }
+        }));
+    };
+    
+    const handleAddItemToProduct = (stockItem) => {
+        if (formData.items.some(i => i.stockItemId === stockItem.id)) return; // Avoid duplicates
+        const newItem = {
+            stockItemId: stockItem.id,
+            name: stockItem.name,
+            model: stockItem.model,
+            avgCostLKR: stockItem.avgCostLKR,
+            qty: 1
+        };
+        setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
+    };
+
+    const handleRemoveItemFromProduct = (stockItemId) => {
+        setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.stockItemId !== stockItemId)}));
+    };
+
+    const handleItemQuantityChange = (stockItemId, newQty) => {
+        setFormData(prev => ({
+            ...prev,
+            items: prev.items.map(item => item.stockItemId === stockItemId ? {...item, qty: parseFloat(newQty) || 0} : item)
+        }));
+    };
+
+    const calculatedCosts = useMemo(() => {
+        const rawMaterialCost = formData.items.reduce((acc, item) => acc + (item.qty * item.avgCostLKR), 0);
+        
+        let totalCost = rawMaterialCost;
+        const costBreakdown = { rawMaterialCost };
+
+        Object.entries(formData.costing).forEach(([key, value]) => {
+            if (key !== 'profit') {
+                const costValue = rawMaterialCost * (value / 100);
+                totalCost += costValue;
+                costBreakdown[key] = costValue;
+            }
+        });
+
+        const profitAmount = totalCost * (formData.costing.profit / 100);
+        const finalUnitPrice = totalCost + profitAmount;
+        costBreakdown.profit = profitAmount;
+        costBreakdown.totalCost = totalCost;
+
+        return { rawMaterialCost, finalUnitPrice, costBreakdown };
+    }, [formData.items, formData.costing]);
+
+    const handleSave = async () => {
+        if (!formData.name || formData.items.length === 0) {
+            alert('Product name and at least one item are required.');
+            return;
+        }
+
+        const dataToSave = {
+            ...formData,
+            finalUnitPrice: calculatedCosts.finalUnitPrice,
+            rawMaterialCost: calculatedCosts.rawMaterialCost,
+            costBreakdown: calculatedCosts.costBreakdown,
+            updatedAt: Timestamp.now(),
+        };
+
+        try {
+            if (isEditing) {
+                const docRef = doc(db, 'products', formData.id);
+                await updateDoc(docRef, dataToSave);
+            } else {
+                dataToSave.createdAt = Timestamp.now();
+                await addDoc(collection(db, 'products'), dataToSave);
+            }
+            fetchData();
+            setView('list');
+        } catch (err) {
+            console.error(err);
+            setError("Failed to save product.");
+        }
+    };
+    
+    const openCostSheet = (product) => {
+        setSelectedProductForCostSheet(product);
+        setIsCostSheetModalOpen(true);
+    };
+
+    const filteredStockItems = stockItems.filter(item => 
+        item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || 
+        item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+    );
+
+    const loadScript = (src) => new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Script load error for ${src}`));
+        document.head.appendChild(script);
+    });
+
+    const exportCostSheetPDF = async (product) => {
+        if (!['super_admin', 'admin'].includes(currentUser.role)) {
+            alert("You don't have permission to export cost sheets.");
+            return;
+        }
+
+        try {
+            await Promise.all([
+                loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"),
+                loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.umd.min.js")
+            ]);
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text(`Cost Sheet: ${product.name}`, 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Serial Number: ${product.serialNumber}`, 14, 30);
+            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, 120, 30);
+
+            const itemData = product.items.map(item => [
+                item.name,
+                item.model,
+                item.qty,
+                `LKR ${item.avgCostLKR.toFixed(2)}`,
+                `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
+            ]);
+
+            doc.autoTable({
+                startY: 40,
+                head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
+                body: itemData,
+                theme: 'striped',
+                headStyles: { fillColor: [22, 160, 133] }
+            });
+
+            const finalY = doc.autoTable.previous.finalY;
+            const costData = [
+                ['Raw Material Cost', `LKR ${product.costBreakdown.rawMaterialCost.toFixed(2)}`],
+                [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
+                [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
+                [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
+                [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
+                [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
+            ];
+             doc.autoTable({
+                startY: finalY + 10,
+                head: [['Cost Component', 'Amount']],
+                body: costData,
+                theme: 'grid',
+            });
+
+            const secondFinalY = doc.autoTable.previous.finalY;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Total Production Cost:', 14, secondFinalY + 10);
+            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, 150, secondFinalY + 10);
+            
+            doc.text(`Profit (${product.costing.profit}%):`, 14, secondFinalY + 17);
+            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, 150, secondFinalY + 17);
+            
+            doc.setDrawColor(0);
+            doc.line(14, secondFinalY + 20, 196, secondFinalY + 20);
+
+            doc.setFontSize(14);
+            doc.text('Final Selling Price:', 14, secondFinalY + 27);
+            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, 150, secondFinalY + 27);
+
+            doc.save(`cost-sheet-${product.serialNumber}.pdf`);
+
+        } catch (err) {
+            console.error("PDF Export failed", err);
+            setError("Could not generate PDF. Please try again.");
+        }
+    };
+    
+    if(loading) return <div className="p-8 text-center">Loading...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    if (view === 'form') {
+        return (
+            <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? 'Edit Product' : 'Create New Product'}</h2>
+                    <div>
+                         <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
+                         <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save Product</button>
+                    </div>
+                </div>
+
+                {/* Product Details */}
+                <fieldset className="mb-6 p-4 border rounded-md"><legend className="font-semibold px-2">Product Details</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label>Product Name</label><input type="text" name="name" value={formData.name} onChange={handleFormInputChange} className="w-full p-2 border rounded"/></div>
+                        <div><label>Serial Number</label><input type="text" value={formData.serialNumber} readOnly className="w-full p-2 border rounded bg-gray-100"/></div>
+                        <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description} onChange={handleFormInputChange} className="w-full p-2 border rounded" rows="3"></textarea></div>
+                    </div>
+                </fieldset>
+
+                {/* Build Items */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Add Stock Items</legend>
+                        <input type="text" placeholder="Search stock items..." value={stockSearchTerm} onChange={(e) => setStockSearchTerm(e.target.value)} className="w-full p-2 border rounded mb-2"/>
+                        <div className="max-h-64 overflow-y-auto">
+                            {filteredStockItems.map(item => (
+                                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
+                                    <span>{item.name} <span className="text-xs text-gray-500">({item.model})</span></span>
+                                    <button onClick={() => handleAddItemToProduct(item)} className="text-sm bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">+</button>
+                                </div>
+                            ))}
+                        </div>
+                    </fieldset>
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Required Items</legend>
+                        <div className="max-h-72 overflow-y-auto">
+                        {formData.items.length === 0 ? <p className="text-gray-500 text-center py-4">No items added yet.</p> :
+                            formData.items.map(item => (
+                                <div key={item.stockItemId} className="flex items-center space-x-2 p-2 border-b">
+                                    <span className="flex-grow">{item.name} <span className="text-xs text-gray-500">(LKR {item.avgCostLKR.toFixed(2)})</span></span>
+                                    <input type="number" value={item.qty} onChange={(e) => handleItemQuantityChange(item.stockItemId, e.target.value)} className="w-20 p-1 border rounded text-center"/>
+                                    <button onClick={() => handleRemoveItemFromProduct(item.stockItemId)} className="text-red-500 hover:text-red-700">×</button>
+                                </div>
+                            ))
+                        }
+                        </div>
+                    </fieldset>
+                </div>
+
+                {/* Costing */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Cost Percentages (based on Raw Material Cost)</legend>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {Object.keys(formData.costing).map(key => (
+                                <div key={key}><label className="capitalize text-sm">{key.replace(/([A-Z])/g, ' $1')}</label>
+                                <div className="relative"><input type="number" name={key} value={formData.costing[key]} onChange={handleCostingChange} className="w-full p-2 border rounded pr-8"/>
+                                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span></div></div>
+                            ))}
+                        </div>
+                    </fieldset>
+                     <fieldset className="p-4 border rounded-md bg-gray-50"><legend className="font-semibold px-2">Calculated Price</legend>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-lg"><span className="font-medium">Raw Material Cost:</span><span>LKR {calculatedCosts.rawMaterialCost.toFixed(2)}</span></div>
+                            <hr/>
+                            <div className="flex justify-between text-xl font-bold mt-2"><span className="text-green-700">Final Unit Price:</span><span className="text-green-700">LKR {calculatedCosts.finalUnitPrice.toFixed(2)}</span></div>
+                        </div>
+                     </fieldset>
+                </div>
+
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 sm:p-8">
+            {isCostSheetModalOpen && selectedProductForCostSheet && (
+                <Modal isOpen={isCostSheetModalOpen} onClose={() => setIsCostSheetModalOpen(false)} size="4xl">
+                    <div className="p-2">
+                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Cost Sheet: {selectedProductForCostSheet.name}</h3>
+                        <div className="mb-4">
+                            <h4 className="font-semibold text-lg mb-2 border-b pb-1">Required Items</h4>
+                            <ul>{selectedProductForCostSheet.items.map(item => (
+                                <li key={item.stockItemId} className="flex justify-between py-1"><span>{item.name} x {item.qty}</span> <span>LKR {(item.avgCostLKR * item.qty).toFixed(2)}</span></li>
+                            ))}</ul>
+                            <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Raw Material Total:</span><span>LKR {selectedProductForCostSheet.rawMaterialCost.toFixed(2)}</span></div>
+                        </div>
+
+                        <div className="mb-4">
+                             <h4 className="font-semibold text-lg mb-2 border-b pb-1">Cost Breakdown</h4>
+                             <ul>{Object.entries(selectedProductForCostSheet.costBreakdown).map(([key, value]) => key !== 'rawMaterialCost' && key !== 'totalCost' && (
+                                 <li key={key} className="flex justify-between py-1 capitalize"><span>{key.replace(/([A-Z])/g, ' $1')}</span> <span>LKR {value.toFixed(2)}</span></li>
+                             ))}</ul>
+                              <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Total Production Cost:</span><span>LKR {selectedProductForCostSheet.costBreakdown.totalCost.toFixed(2)}</span></div>
+                        </div>
+
+                        <div className="text-center bg-green-100 p-4 rounded-lg">
+                            <p className="text-lg font-semibold text-green-800">Final Selling Price</p>
+                            <p className="text-3xl font-bold text-green-900">LKR {selectedProductForCostSheet.finalUnitPrice.toFixed(2)}</p>
+                        </div>
+                        
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => exportCostSheetPDF(selectedProductForCostSheet)} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Export as PDF</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Product Management</h2>
+                <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Create New Product</button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="overflow-x-auto"><table className="min-w-full">
+                    <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Serial No.</th><th className="px-5 py-3 text-left">Product Name</th><th className="px-5 py-3 text-left">Items</th><th className="px-5 py-3 text-left">Final Price (LKR)</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                    <tbody>
+                        {products.map(p => (
+                            <tr key={p.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{p.serialNumber}</td>
+                                <td className="px-5 py-4 font-semibold">{p.name}</td>
+                                <td className="px-5 py-4 text-sm">{p.items.length}</td>
+                                <td className="px-5 py-4 font-semibold text-green-700">{p.finalUnitPrice.toFixed(2)}</td>
+                                <td className="px-5 py-4 text-center">
+                                    <div className="flex justify-center space-x-2">
+                                        {['super_admin', 'admin'].includes(currentUser.role) && <button onClick={() => openCostSheet(p)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>}
+                                        <button onClick={() => handleEdit(p)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                        {currentUser.role === 'super_admin' && <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+    );
+};
+
+
 const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
+const SupplierManagement = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2><p className="mt-4 text-gray-600">This module is under construction and will be used to manage supplier information.</p></div>;
+
 const HomePage = ({ onSignInClick }) => {
     return (
         <div className="bg-white text-gray-800">
@@ -1427,6 +1849,7 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'import_stock_management': return <StockManagement onViewImport={handleViewImport} />;
             case 'import_shop_management': return <ShopManagement />;
             case 'import_supplier_management': return <SupplierManagement />;
+            case 'import_product_management': return <ProductManagement currentUser={user} />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
@@ -1455,6 +1878,7 @@ const Dashboard = ({ user, onSignOut }) => {
                             {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50">
                                 <NavLink view="import_dashboard">Import Dashboard</NavLink>
                                 <NavLink view="import_management">Import Management</NavLink>
+                                <NavLink view="import_product_management">Product Management</NavLink>
                                 <NavLink view="import_customer_management">Customer Management</NavLink>
                                 <NavLink view="import_stock_management">Stock Management</NavLink>
                                 <NavLink view="import_shop_management">Shop Management</NavLink>
