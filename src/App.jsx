@@ -1336,7 +1336,7 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
     );
 };
 // ====================================================================================
-// --- NEW PRODUCT MANAGEMENT COMPONENT ---
+// --- PRODUCT MANAGEMENT COMPONENT ---
 // ====================================================================================
 const ProductManagement = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list', 'form'
@@ -1346,8 +1346,11 @@ const ProductManagement = ({ currentUser }) => {
     const [error, setError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [stockSearchTerm, setStockSearchTerm] = useState('');
+    const [productSearchTerm, setProductSearchTerm] = useState(''); // State for the new search bar
     const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
     const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
+
+    const letterheadBase64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAMgA8ADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD6pooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoooo-";
 
     const initialFormData = {
         name: '',
@@ -1369,23 +1372,15 @@ const ProductManagement = ({ currentUser }) => {
         setLoading(true);
         try {
             const [productsSnap, stockSnap] = await Promise.all([
-                getDocs(collection(db, 'products')),
+                getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc'))),
                 getDocs(collection(db, 'import_stock')),
             ]);
-            const productsList = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            productsList.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-            setProducts(productsList);
+            setProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
             
-            // Fetch the latest serial cost for each stock item as its average cost
             const stockItemsWithCost = await Promise.all(stockSnap.docs.map(async (doc) => {
                 const item = { id: doc.id, ...doc.data() };
-                const serialsSnap = await getDocs(collection(db, 'import_stock', item.id, 'serials'));
-                let latestSerial = null;
-                if (!serialsSnap.empty) {
-                    const serialsList = serialsSnap.docs.map(d => d.data());
-                    serialsList.sort((a, b) => (b.purchaseDate?.toMillis() || 0) - (a.purchaseDate?.toMillis() || 0));
-                    latestSerial = serialsList[0];
-                }
+                const serialsSnap = await getDocs(query(collection(db, 'import_stock', item.id, 'serials'), orderBy('purchaseDate', 'desc')));
+                const latestSerial = serialsSnap.empty ? null : serialsSnap.docs[0].data();
                 return { ...item, avgCostLKR: latestSerial?.finalCostLKR || 0 };
             }));
 
@@ -1447,7 +1442,7 @@ const ProductManagement = ({ currentUser }) => {
     };
     
     const handleAddItemToProduct = (stockItem) => {
-        if (formData.items.some(i => i.stockItemId === stockItem.id)) return; // Avoid duplicates
+        if (formData.items.some(i => i.stockItemId === stockItem.id)) return;
         const newItem = {
             stockItemId: stockItem.id,
             name: stockItem.name,
@@ -1471,7 +1466,6 @@ const ProductManagement = ({ currentUser }) => {
 
     const calculatedCosts = useMemo(() => {
         const rawMaterialCost = formData.items.reduce((acc, item) => acc + (item.qty * item.avgCostLKR), 0);
-        
         let totalCost = rawMaterialCost;
         const costBreakdown = { rawMaterialCost };
 
@@ -1487,7 +1481,6 @@ const ProductManagement = ({ currentUser }) => {
         const finalUnitPrice = totalCost + profitAmount;
         costBreakdown.profit = profitAmount;
         costBreakdown.totalCost = totalCost;
-
         return { rawMaterialCost, finalUnitPrice, costBreakdown };
     }, [formData.items, formData.costing]);
 
@@ -1496,6 +1489,11 @@ const ProductManagement = ({ currentUser }) => {
             alert('Product name and at least one item are required.');
             return;
         }
+        
+        const userInfo = {
+            uid: currentUser.uid,
+            displayName: currentUser.displayName || currentUser.email,
+        };
 
         const dataToSave = {
             ...formData,
@@ -1503,6 +1501,7 @@ const ProductManagement = ({ currentUser }) => {
             rawMaterialCost: calculatedCosts.rawMaterialCost,
             costBreakdown: calculatedCosts.costBreakdown,
             updatedAt: Timestamp.now(),
+            lastUpdatedBy: userInfo,
         };
 
         try {
@@ -1511,6 +1510,7 @@ const ProductManagement = ({ currentUser }) => {
                 await updateDoc(docRef, dataToSave);
             } else {
                 dataToSave.createdAt = Timestamp.now();
+                dataToSave.createdBy = userInfo;
                 await addDoc(collection(db, 'products'), dataToSave);
             }
             fetchData();
@@ -1526,42 +1526,51 @@ const ProductManagement = ({ currentUser }) => {
         setIsCostSheetModalOpen(true);
     };
 
-    const filteredStockItems = stockItems.filter(item => 
-        item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || 
-        item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
-    );
-
-  const exportCostSheetPDF = async (product) => {
+    const exportCostSheetPDF = async (product) => {
         if (!['super_admin', 'admin'].includes(currentUser.role)) {
             alert("You don't have permission to export cost sheets.");
             return;
         }
-
         try {
-            const doc = new jsPDF();
-            
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            const topMargin = 45;
+            const leftMargin = 20;
+            const rightMargin = 15;
+            const contentWidth = pageWidth - leftMargin - rightMargin;
+
+            const addLetterhead = () => {
+                doc.addImage(letterheadBase64, 'JPEG', 0, 0, pageWidth, pageHeight);
+            };
+
+            addLetterhead();
+
             doc.setFontSize(18);
-            doc.text(`Cost Sheet: ${product.name}`, 14, 22);
+            doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
+            
             doc.setFontSize(11);
             doc.setTextColor(100);
-            doc.text(`Serial Number: ${product.serialNumber}`, 14, 30);
-            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, 120, 30);
+            doc.text(`Product: ${product.name}`, leftMargin, topMargin + 10);
+            doc.text(`Serial Number: ${product.serialNumber}`, leftMargin, topMargin + 15);
+            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 15, { align: 'right' });
 
-            const itemData = product.items.map(item => [
-                item.name,
-                item.model,
-                item.qty,
-                `LKR ${item.avgCostLKR.toFixed(2)}`,
-                `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
-            ]);
 
-            // Draw the first table for items
-            autoTable(doc, {
-                startY: 40,
+            const itemData = product.items.map(item => [ item.name, item.model, item.qty, `LKR ${item.avgCostLKR.toFixed(2)}`, `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}` ]);
+            
+            autoTable(doc, { 
+                startY: topMargin + 25,
                 head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
                 body: itemData,
                 theme: 'striped',
-                headStyles: { fillColor: [22, 160, 133] }
+                headStyles: { fillColor: [22, 160, 133] },
+                margin: { left: leftMargin, right: rightMargin },
+                didDrawPage: (data) => {
+                    if (data.pageNumber > 1) {
+                        addLetterhead();
+                    }
+                }
             });
 
             const costData = [
@@ -1572,32 +1581,34 @@ const ProductManagement = ({ currentUser }) => {
                 [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
                 [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
             ];
-            
-            // Now that the first table is drawn, we can safely get its final position
-            // and use it to start the second table.
-             autoTable(doc, {
-                startY: doc.autoTable.previous.finalY + 10,
-                head: [['Cost Component', 'Amount']],
-                body: costData,
-                theme: 'grid',
+
+            autoTable(doc, {
+                 startY: doc.autoTable.previous.finalY + 8,
+                 head: [['Cost Component', 'Amount']],
+                 body: costData,
+                 theme: 'grid',
+                 margin: { left: leftMargin, right: rightMargin },
+                 didDrawPage: (data) => {
+                    addLetterhead();
+                 }
             });
 
             const secondFinalY = doc.autoTable.previous.finalY;
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
-            doc.text('Total Production Cost:', 14, secondFinalY + 10);
-            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, 150, secondFinalY + 10);
+            doc.text('Total Production Cost:', leftMargin, secondFinalY + 10);
+            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 10, { align: 'right' });
             
-            doc.text(`Profit (${product.costing.profit}%):`, 14, secondFinalY + 17);
-            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, 150, secondFinalY + 17);
+            doc.text(`Profit (${product.costing.profit}%):`, leftMargin, secondFinalY + 17);
+            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 17, { align: 'right' });
             
             doc.setDrawColor(0);
-            doc.line(14, secondFinalY + 20, 196, secondFinalY + 20);
+            doc.line(leftMargin, secondFinalY + 20, pageWidth - rightMargin, secondFinalY + 20);
 
             doc.setFontSize(14);
-            doc.text('Final Selling Price:', 14, secondFinalY + 27);
-            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, 150, secondFinalY + 27);
-
+            doc.text('Final Selling Price:', leftMargin, secondFinalY + 27);
+            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 27, { align: 'right' });
+            
             doc.save(`cost-sheet-${product.serialNumber}.pdf`);
 
         } catch (err) {
@@ -1606,6 +1617,17 @@ const ProductManagement = ({ currentUser }) => {
         }
     };
     
+    // Filter products based on the search term
+    const filteredProducts = products.filter(p =>
+        p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+        p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase())
+    );
+
+    const filteredStockItems = stockItems.filter(item => 
+        item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || 
+        item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+    );
+
     if(loading) return <div className="p-8 text-center">Loading...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
@@ -1619,8 +1641,6 @@ const ProductManagement = ({ currentUser }) => {
                          <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save Product</button>
                     </div>
                 </div>
-
-                {/* Product Details */}
                 <fieldset className="mb-6 p-4 border rounded-md"><legend className="font-semibold px-2">Product Details</legend>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div><label>Product Name</label><input type="text" name="name" value={formData.name} onChange={handleFormInputChange} className="w-full p-2 border rounded"/></div>
@@ -1628,8 +1648,6 @@ const ProductManagement = ({ currentUser }) => {
                         <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description} onChange={handleFormInputChange} className="w-full p-2 border rounded" rows="3"></textarea></div>
                     </div>
                 </fieldset>
-
-                {/* Build Items */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Add Stock Items</legend>
                         <input type="text" placeholder="Search stock items..." value={stockSearchTerm} onChange={(e) => setStockSearchTerm(e.target.value)} className="w-full p-2 border rounded mb-2"/>
@@ -1656,8 +1674,6 @@ const ProductManagement = ({ currentUser }) => {
                         </div>
                     </fieldset>
                 </div>
-
-                {/* Costing */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Cost Percentages (based on Raw Material Cost)</legend>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -1676,7 +1692,6 @@ const ProductManagement = ({ currentUser }) => {
                         </div>
                      </fieldset>
                 </div>
-
             </div>
         );
     }
@@ -1688,13 +1703,15 @@ const ProductManagement = ({ currentUser }) => {
                     <div className="p-2">
                         <h3 className="text-2xl font-bold text-gray-900 mb-4">Cost Sheet: {selectedProductForCostSheet.name}</h3>
                         <div className="mb-4">
+                            <p className="text-sm text-gray-500">Last updated by: {selectedProductForCostSheet.lastUpdatedBy?.displayName || 'N/A'} on {selectedProductForCostSheet.updatedAt?.toDate().toLocaleDateString()}</p>
+                        </div>
+                        <div className="mb-4">
                             <h4 className="font-semibold text-lg mb-2 border-b pb-1">Required Items</h4>
                             <ul>{selectedProductForCostSheet.items.map(item => (
                                 <li key={item.stockItemId} className="flex justify-between py-1"><span>{item.name} x {item.qty}</span> <span>LKR {(item.avgCostLKR * item.qty).toFixed(2)}</span></li>
                             ))}</ul>
                             <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Raw Material Total:</span><span>LKR {selectedProductForCostSheet.rawMaterialCost.toFixed(2)}</span></div>
                         </div>
-
                         <div className="mb-4">
                              <h4 className="font-semibold text-lg mb-2 border-b pb-1">Cost Breakdown</h4>
                              <ul>{Object.entries(selectedProductForCostSheet.costBreakdown).map(([key, value]) => key !== 'rawMaterialCost' && key !== 'totalCost' && (
@@ -1702,12 +1719,10 @@ const ProductManagement = ({ currentUser }) => {
                              ))}</ul>
                               <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Total Production Cost:</span><span>LKR {selectedProductForCostSheet.costBreakdown.totalCost.toFixed(2)}</span></div>
                         </div>
-
                         <div className="text-center bg-green-100 p-4 rounded-lg">
                             <p className="text-lg font-semibold text-green-800">Final Selling Price</p>
                             <p className="text-3xl font-bold text-green-900">LKR {selectedProductForCostSheet.finalUnitPrice.toFixed(2)}</p>
                         </div>
-                        
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => exportCostSheetPDF(selectedProductForCostSheet)} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Export as PDF</button>
                         </div>
@@ -1720,14 +1735,32 @@ const ProductManagement = ({ currentUser }) => {
                 <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Create New Product</button>
             </div>
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b">
+                    <input
+                        type="text"
+                        placeholder="Search by Product Name or Serial No..."
+                        value={productSearchTerm}
+                        onChange={(e) => setProductSearchTerm(e.target.value)}
+                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
                 <div className="overflow-x-auto"><table className="min-w-full">
-                    <thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Serial No.</th><th className="px-5 py-3 text-left">Product Name</th><th className="px-5 py-3 text-left">Items</th><th className="px-5 py-3 text-left">Final Price (LKR)</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                    <thead><tr className="bg-gray-100">
+                        <th className="px-5 py-3 text-left">Serial No.</th>
+                        <th className="px-5 py-3 text-left">Product Name</th>
+                        <th className="px-5 py-3 text-left">Last Updated By</th>
+                        <th className="px-5 py-3 text-left">Final Price (LKR)</th>
+                        <th className="px-5 py-3 text-center">Actions</th>
+                    </tr></thead>
                     <tbody>
-                        {products.map(p => (
+                        {filteredProducts.map(p => (
                             <tr key={p.id} className="border-b hover:bg-gray-50">
                                 <td className="px-5 py-4 font-mono text-sm">{p.serialNumber}</td>
                                 <td className="px-5 py-4 font-semibold">{p.name}</td>
-                                <td className="px-5 py-4 text-sm">{p.items.length}</td>
+                                <td className="px-5 py-4 text-sm">
+                                    <p className="text-gray-900 whitespace-no-wrap">{p.lastUpdatedBy?.displayName || 'N/A'}</p>
+                                    <p className="text-gray-600 whitespace-no-wrap text-xs">{p.updatedAt?.toDate().toLocaleDateString()}</p>
+                                </td>
                                 <td className="px-5 py-4 font-semibold text-green-700">{p.finalUnitPrice.toFixed(2)}</td>
                                 <td className="px-5 py-4 text-center">
                                     <div className="flex justify-center space-x-2">
@@ -1748,7 +1781,151 @@ const ProductManagement = ({ currentUser }) => {
 
 const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
-const SupplierManagement = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2><p className="mt-4 text-gray-600">This module is under construction and will be used to manage supplier information.</p></div>;
+
+// --- NEW, FUNCTIONAL SUPPLIER MANAGEMENT COMPONENT ---
+const SupplierManagement = () => {
+    const [suppliers, setSuppliers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({});
+
+    const fetchSuppliers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'suppliers'));
+            const suppliersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSuppliers(suppliersList);
+        } catch (err) {
+            setError('Failed to fetch suppliers.');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchSuppliers();
+    }, [fetchSuppliers]);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                const docRef = doc(db, 'suppliers', formData.id);
+                await updateDoc(docRef, { ...formData, updatedAt: Timestamp.now() });
+            } else {
+                await addDoc(collection(db, 'suppliers'), { ...formData, createdAt: Timestamp.now() });
+            }
+            fetchSuppliers();
+            setIsModalOpen(false);
+        } catch (err) {
+            setError('Failed to save supplier data.');
+            console.error(err);
+        }
+    };
+
+    const openAddModal = () => {
+        setIsEditing(false);
+        setFormData({
+            companyName: '',
+            contactPerson: '',
+            email: '',
+            telephone: '',
+            address: '',
+            productsSupplied: ''
+        });
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (supplier) => {
+        setIsEditing(true);
+        setFormData(supplier);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = async (supplierId) => {
+        if (window.confirm('Are you sure you want to delete this supplier?')) {
+            try {
+                await deleteDoc(doc(db, 'suppliers', supplierId));
+                fetchSuppliers();
+            } catch (err) {
+                setError('Failed to delete supplier.');
+                console.error(err);
+            }
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Suppliers...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium">Company Name</label><input type="text" name="companyName" required value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Contact Person</label><input type="text" name="contactPerson" value={formData.contactPerson || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                        <div><label className="block text-sm font-medium">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    </div>
+                    <div><label className="block text-sm font-medium">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
+                    <div><label className="block text-sm font-medium">Products/Services Supplied</label><textarea name="productsSupplied" value={formData.productsSupplied || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                    <div className="flex justify-end pt-4">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="mr-3 px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Supplier'}</button>
+                    </div>
+                </form>
+            </Modal>
+
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2>
+                <button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <PlusCircleIcon/> Add Supplier
+                </button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead><tr className="bg-gray-100">
+                        <th className="px-5 py-3 text-left">Company</th>
+                        <th className="px-5 py-3 text-left">Contact Info</th>
+                        <th className="px-5 py-3 text-left">Address</th>
+                        <th className="px-5 py-3 text-center">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                        {suppliers.map(supplier => (
+                            <tr key={supplier.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4">
+                                    <p className="font-semibold">{supplier.companyName}</p>
+                                    <p className="text-sm text-gray-600">{supplier.contactPerson}</p>
+                                </td>
+                                <td className="px-5 py-4 text-sm">
+                                    <p>{supplier.email}</p>
+                                    <p>{supplier.telephone}</p>
+                                </td>
+                                <td className="px-5 py-4 text-sm">{supplier.address}</td>
+                                <td className="px-5 py-4 text-center">
+                                    <div className="flex justify-center space-x-3">
+                                        <button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                        <button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 
 const HomePage = ({ onSignInClick }) => {
     return (
