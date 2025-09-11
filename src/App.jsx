@@ -1531,7 +1531,7 @@ const ProductManagement = ({ currentUser }) => {
         item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
     );
 
-    const exportCostSheetPDF = async (product) => {
+  const exportCostSheetPDF = async (product) => {
         if (!['super_admin', 'admin'].includes(currentUser.role)) {
             alert("You don't have permission to export cost sheets.");
             return;
@@ -1555,6 +1555,7 @@ const ProductManagement = ({ currentUser }) => {
                 `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
             ]);
 
+            // Draw the first table for items
             autoTable(doc, {
                 startY: 40,
                 head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
@@ -1571,14 +1572,17 @@ const ProductManagement = ({ currentUser }) => {
                 [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
                 [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
             ];
+            
+            // Now that the first table is drawn, we can safely get its final position
+            // and use it to start the second table.
              autoTable(doc, {
-                startY: (doc).autoTable.previous.finalY + 10,
+                startY: doc.autoTable.previous.finalY + 10,
                 head: [['Cost Component', 'Amount']],
                 body: costData,
                 theme: 'grid',
             });
 
-            const secondFinalY = (doc).autoTable.previous.finalY;
+            const secondFinalY = doc.autoTable.previous.finalY;
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text('Total Production Cost:', 14, secondFinalY + 10);
@@ -1597,8 +1601,8 @@ const ProductManagement = ({ currentUser }) => {
             doc.save(`cost-sheet-${product.serialNumber}.pdf`);
 
         } catch (err) {
-            console.error("PDF Export failed", err);
-            setError("Could not generate PDF. Please try again.");
+            console.error("PDF Export failed with error:", err);
+            setError("Could not generate PDF. Please check the console for errors.");
         }
     };
     
