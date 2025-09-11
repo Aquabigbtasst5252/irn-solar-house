@@ -1367,17 +1367,23 @@ const ProductManagement = ({ currentUser }) => {
         setLoading(true);
         try {
             const [productsSnap, stockSnap] = await Promise.all([
-                getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc'))),
+                getDocs(collection(db, 'products')),
                 getDocs(collection(db, 'import_stock')),
             ]);
-            setProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            const productsList = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            productsList.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+            setProducts(productsList);
             
             // Fetch the latest serial cost for each stock item as its average cost
             const stockItemsWithCost = await Promise.all(stockSnap.docs.map(async (doc) => {
                 const item = { id: doc.id, ...doc.data() };
-                const serialsQuery = query(collection(db, 'import_stock', item.id, 'serials'), orderBy('purchaseDate', 'desc'));
-                const serialsSnap = await getDocs(serialsQuery);
-                const latestSerial = serialsSnap.docs[0]?.data();
+                const serialsSnap = await getDocs(collection(db, 'import_stock', item.id, 'serials'));
+                let latestSerial = null;
+                if (!serialsSnap.empty) {
+                    const serialsList = serialsSnap.docs.map(d => d.data());
+                    serialsList.sort((a, b) => (b.purchaseDate?.toMillis() || 0) - (a.purchaseDate?.toMillis() || 0));
+                    latestSerial = serialsList[0];
+                }
                 return { ...item, avgCostLKR: latestSerial?.finalCostLKR || 0 };
             }));
 
@@ -1934,3 +1940,4 @@ export default function App() {
 
   return (<div className="font-sans">{renderContent()}</div>);
 }
+
