@@ -1960,8 +1960,8 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- Video Hero Section --- */}
-            <section className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden">
+            {/* --- Updated Video Hero Section (without text/button) --- */}
+            <section className="relative h-[65vh] md:h-[85vh] w-full overflow-hidden flex items-center justify-center"> {/* Added flex for centering */}
                 <video 
                     ref={videoRef}
                     src="/hero-video.mp4" 
@@ -1969,19 +1969,9 @@ const HomePage = ({ onSignInClick }) => {
                     loop 
                     muted 
                     playsInline
-                    className="absolute z-0 w-full h-full object-cover"
+                    className="absolute z-0 w-full h-full object-cover" 
                 />
-                <div className="relative z-10 h-full flex flex-col justify-center items-center text-center bg-black/50 p-4">
-                    <h1 className="text-white text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-4" style={{textShadow: '2px 2px 8px rgba(0,0,0,0.7)'}}>
-                        A Brighter Sri Lanka, Powered by the Sun
-                    </h1>
-                    <p className="text-gray-200 text-lg md:text-xl max-w-2xl mb-8" style={{textShadow: '1px 1px 4px rgba(0,0,0,0.7)'}}>
-                        Reliable, high-quality solar solutions for homes and businesses.
-                    </p>
-                    <a href="#contact" className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 px-8 rounded-full transition duration-300 text-lg shadow-xl hover:shadow-2xl transform hover:scale-105">
-                        Get a Free Quote
-                    </a>
-                </div>
+                {/* Removed the text and button div */}
             </section>
             
             {/* --- REDESIGNED Sections --- */}
