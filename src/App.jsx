@@ -1934,10 +1934,8 @@ const HomePage = ({ onSignInClick }) => {
     const videoRef = useRef(null);
 
     useEffect(() => {
-        // This attempts to play the video as soon as the component is ready.
         if (videoRef.current) {
             videoRef.current.play().catch(error => {
-                // Autoplay was prevented.
                 console.error("Video autoplay was prevented:", error);
             });
         }
@@ -1966,15 +1964,15 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- NEW Video Hero Section with programmatic play --- */}
+            {/* --- Video Hero Section --- */}
             <section className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden">
                 <video 
-                    ref={videoRef} // Reference for JavaScript control
+                    ref={videoRef}
                     src="/hero-video.mp4" 
                     autoPlay 
                     loop 
                     muted 
-                    playsInline // Essential for iOS autoplay
+                    playsInline
                     className="absolute z-0 w-full h-full object-cover"
                 />
                 <div className="relative z-10 h-full flex flex-col justify-center items-center text-center bg-black/50 p-4">
