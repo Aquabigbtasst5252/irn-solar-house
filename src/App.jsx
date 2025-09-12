@@ -1933,7 +1933,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
         {
             id: 'swp-01',
             name: 'Solar Water Pump',
-            imageUrl: 'https://i.imgur.com/oyT4Os2.jpeg',
+            imageUrl: 'https://i.imgur.com/zpkAcbW.jpeg',
             description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.',
             // --- NEW DATA ADDED HERE ---
             keyFeatures: [
