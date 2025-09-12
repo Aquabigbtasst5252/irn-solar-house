@@ -1926,10 +1926,6 @@ const SupplierManagement = () => {
     );
 };
 
-
-import React, { useRef, useEffect } from 'react'; // Make sure to import useRef and useEffect
-// ... (keep all the other icon imports)
-
 const HomePage = ({ onSignInClick }) => {
     const videoRef = useRef(null);
 
