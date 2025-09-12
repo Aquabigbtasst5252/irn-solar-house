@@ -1928,64 +1928,112 @@ const SupplierManagement = () => {
 
 
 const HomePage = ({ onSignInClick }) => {
-    // The full HTML embed code provided by Canva, with the autoplay parameter added
-    const canvaEmbedCode = `
-        <div style="position: relative; width: 100%; height: 0; padding-top: 56.2500%;
-        padding-bottom: 0; box-shadow: 0 2px 8px 0 rgba(63,69,81,0.16); margin-top: 1.6em; margin-bottom: 0.9em; overflow: hidden;
-        border-radius: 8px; will-change: transform;">
-        <iframe loading="lazy" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0;margin: 0;"
-            src="https://www.canva.com/design/DAGyvAbdvRI/TNPuHz5G9w81tACAMGaR_A/view?embed&autoplay=1" allowfullscreen="allowfullscreen" allow="fullscreen">
-        </iframe>
-        </div>
-        <a href="https:&#x2F;&#x2F;www.canva.com&#x2F;design&#x2F;DAGyvAbdvRI&#x2F;TNPuHz5G9w81tACAMGaR_A&#x2F;view?utm_content=DAGyvAbdvRI&amp;utm_campaign=designshare&amp;utm_medium=embeds&amp;utm_source=link" target="_blank" rel="noopener" style="display: block; text-align: center; font-size: 12px; padding: 0.5em 0; color: #7f8c8d;">
-        </a>
-    `;
-
     return (
-        <div className="bg-white text-gray-800">
-            <header className="bg-white shadow-md sticky top-0 z-40">
-                <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="bg-white text-gray-800 font-sans">
+            {/* --- Header --- */}
+            <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
+                <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
                     <div className="flex items-center">
-                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/>
-                         <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
+                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-10 sm:h-12 w-auto"/>
+                         <span className="ml-3 font-semibold text-lg sm:text-xl text-gray-800">IRN Solar House</span>
                     </div>
-                    <div className="hidden md:flex items-center space-x-6">
-                        <a href="#products" className="hover:text-yellow-600">Products</a>
-                        <a href="#services" className="hover:text-yellow-600">Services</a>
-                        <a href="#about" className="hover:text-yellow-600">About Us</a>
-                        <a href="#contact" className="hover:text-yellow-600">Contact</a>
+                    <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
+                        <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
+                        <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
+                        <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
                     </div>
-                    <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full transition duration-300">Staff Sign In</button>
+                    {/* UPDATED: Mobile responsive button */}
+                    <button 
+                        onClick={onSignInClick} 
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300"
+                    >
+                        Staff Sign In
+                    </button>
                 </nav>
             </header>
 
-            {/* --- NEW CANVA PRESENTATION SECTION --- */}
-            <section className="w-full bg-gray-50 py-4 sm:py-6">
-                 <div className="container mx-auto px-4" dangerouslySetInnerHTML={{ __html: canvaEmbedCode }} />
+            {/* --- NEW Video Hero Section --- */}
+            <section className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden">
+                <video 
+                    src="/hero-video.mp4" // Make sure the path matches your video file in the /public folder
+                    autoPlay 
+                    loop 
+                    muted 
+                    className="absolute z-0 w-full h-full object-cover"
+                />
+                <div className="relative z-10 h-full flex flex-col justify-center items-center text-center bg-black/50 p-4">
+                    <h1 className="text-white text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-4" style={{textShadow: '2px 2px 8px rgba(0,0,0,0.7)'}}>
+                        A Brighter Sri Lanka, Powered by the Sun
+                    </h1>
+                    <p className="text-gray-200 text-lg md:text-xl max-w-2xl mb-8" style={{textShadow: '1px 1px 4px rgba(0,0,0,0.7)'}}>
+                        Reliable, high-quality solar solutions for homes and businesses.
+                    </p>
+                    <a href="#contact" className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 px-8 rounded-full transition duration-300 text-lg shadow-xl hover:shadow-2xl transform hover:scale-105">
+                        Get a Free Quote
+                    </a>
+                </div>
             </section>
             
-            <section id="about" className="py-20 bg-white">
-                <div className="container mx-auto px-6 text-center"><h2 className="text-3xl font-bold mb-4">Why Choose IRN Solar House?</h2><p className="text-gray-600 mb-12 max-w-3xl mx-auto">We are committed to providing top-tier solar technology and exceptional service to homes and businesses across Sri Lanka.</p>
-                    <div className="grid md:grid-cols-3 gap-12">
-                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only the best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
-                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
-                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
+            {/* --- REDESIGNED Sections --- */}
+            <section id="about" className="py-16 sm:py-24 bg-white">
+                <div className="container mx-auto px-6 text-center">
+                    <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">Why Choose IRN Solar House?</h2>
+                    <p className="text-gray-600 mb-16 max-w-3xl mx-auto text-lg">
+                        We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.
+                    </p>
+                    <div className="grid md:grid-cols-3 gap-8">
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
+                            <div className="flex justify-center mb-4"><ShieldCheckIcon /></div>
+                            <h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3>
+                            <p className="text-gray-600">We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p>
+                        </div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
+                            <div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div>
+                            <h3 className="text-xl font-semibold mb-2">Expert Installation</h3>
+                            <p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p>
+                        </div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
+                            <div className="flex justify-center mb-4"><SunIcon /></div>
+                            <h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3>
+                            <p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p>
+                        </div>
                     </div>
                 </div>
             </section>
-            <section id="products" className="py-20 bg-gray-50">
-                <div className="container mx-auto px-6"><h2 className="text-3xl font-bold text-center mb-12">Our Core Products</h2>
+
+            <section id="products" className="py-16 sm:py-24 bg-gray-50">
+                <div className="container mx-auto px-6">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div></div>
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Inverters" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Inverters</h3><p className="text-gray-700">Reliable on-grid, off-grid, and hybrid inverters to convert solar energy into usable power for your home or business.</p></div></div>
-                         <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Batteries" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Battery Storage</h3><p className="text-gray-700">Store excess solar energy with our advanced battery solutions and ensure power during outages.</p></div></div>
+                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                            <img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/>
+                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div>
+                         </div>
+                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                            <img src="https://plus.unsplash.com/premium_photo-1683140737181-27244985237b?q=80&w=2070&auto.format&fit=crop" alt="Solar Inverters" className="w-full h-56 object-cover"/>
+                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Inverters</h3><p className="text-gray-700">Reliable on-grid, off-grid, and hybrid inverters to convert solar energy into usable power for your home or business.</p></div>
+                         </div>
+                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                            <img src="https://images.unsplash.com/photo-1560580973-04a1f6a1d8a1?q=80&w=1964&auto.format&fit=crop" alt="Solar Batteries" className="w-full h-56 object-cover"/>
+                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Battery Storage</h3><p className="text-gray-700">Store excess solar energy with our advanced battery solutions and ensure power during outages.</p></div>
+                         </div>
                     </div>
                 </div>
             </section>
-            <section id="contact" className="py-20 bg-gray-900 text-white">
-                <div className="container mx-auto px-6"><h2 className="text-3xl font-bold text-center mb-12 text-yellow-500">Ready to Go Solar?</h2><div className="max-w-2xl mx-auto text-center"><p className="mb-8">Contact us today for a free consultation and quote. Our experts will help you design the perfect solar system for your needs.</p><p className="text-xl font-bold">Call Us: +94 77 123 4567</p><p className="text-xl font-bold">Email: info@irnsolarhouse.lk</p><p className="mt-4">Or visit us at our office in Negombo, Sri Lanka.</p></div></div>
+
+            <section id="contact" className="py-20 bg-gray-800 text-white">
+                <div className="container mx-auto px-6">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
+                    <div className="max-w-2xl mx-auto text-center">
+                        <p className="mb-8 text-lg text-gray-300">Contact us today for a free consultation and quote. Our experts will help you design the perfect solar system for your needs.</p>
+                        <p className="text-xl font-bold">Hotline: +94 77 123 4567</p>
+                        <p className="text-xl font-bold">Email: info@irnsolarhouse.lk</p>
+                        <p className="mt-4 text-gray-400">Or visit us at our office in Negombo, Sri Lanka.</p>
+                    </div>
+                </div>
             </section>
-            <footer className="bg-gray-800 text-white py-6"><div className="container mx-auto px-6 text-center text-sm"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
+            
+            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
         </div>
     );
 };
