@@ -1926,8 +1926,27 @@ const SupplierManagement = () => {
     );
 };
 
-const HomePage = ({ onSignInClick }) => {
+const HomePage = ({ onSignInClick, onProductSelect }) => {
     const videoRef = useRef(null);
+
+    const coreProducts = [
+        {
+            id: 'swp-01',
+            name: 'Solar Water Pump',
+            imageUrl: 'https://i.imgur.com/bA15N3L.jpeg', // New Image
+            description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.'
+        },
+        {
+            id: 'sac-01',
+            name: 'Solar Air Conditioner',
+            imageUrl: 'https://i.imgur.com/P1n4Y7C.jpeg', // New Image
+            description: 'Stay cool and reduce your electricity bills. Our solar AC units provide sustainable cooling for homes and offices.'
+        }
+    ];
+
+    const googleMapsEmbedCode = `
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.183785244585!2d79.9897009758782!3d7.104445816301121!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae2e5362d2944c3%3A0x6a7a58a221a221e5!2sIRN%20SOLAR%20HOUSE!5e0!3m2!1sen!2slk!4v1726138095493!5m2!1sen!2slk" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    `; // <-- PASTE YOUR GOOGLE MAPS CODE HERE, REPLACING THIS EXAMPLE
 
     useEffect(() => {
         if (videoRef.current) {
@@ -1961,30 +1980,18 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- NEW Video Hero Section with Blurred Background --- */}
             <section className="relative h-[80vh] w-full overflow-hidden bg-black">
-                {/* Blurred Background Video */}
-                <video
-                    autoPlay loop muted playsInline
-                    className="absolute z-0 w-full h-full object-cover blur-xl brightness-75 scale-110"
-                >
+                <video autoPlay loop muted playsInline className="absolute z-0 w-full h-full object-cover blur-xl brightness-75 scale-110">
                     <source src="/hero-video-mobile.mp4" media="(max-width: 768px)" />
                     <source src="/hero-video.mp4" media="(min-width: 769px)" />
                 </video>
-
-                {/* Main, Clear Video (on top) */}
-                <video 
-                    ref={videoRef}
-                    autoPlay loop muted playsInline
-                    className="relative z-10 w-full h-full object-contain"
-                >
+                <video ref={videoRef} autoPlay loop muted playsInline className="relative z-10 w-full h-full object-contain">
                     <source src="/hero-video-mobile.mp4" media="(max-width: 768px)" />
                     <source src="/hero-video.mp4" media="(min-width: 769px)" />
                     Your browser does not support the video tag.
                 </video>
             </section>
             
-            {/* --- REDESIGNED Sections --- */}
             <section id="about" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">Why Choose IRN Solar House?</h2>
@@ -1992,42 +1999,36 @@ const HomePage = ({ onSignInClick }) => {
                         We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.
                     </p>
                     <div className="grid md:grid-cols-3 gap-8">
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
-                            <div className="flex justify-center mb-4"><ShieldCheckIcon /></div>
-                            <h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3>
-                            <p className="text-gray-600">We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p>
-                        </div>
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
-                            <div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div>
-                            <h3 className="text-xl font-semibold mb-2">Expert Installation</h3>
-                            <p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p>
-                        </div>
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl">
-                            <div className="flex justify-center mb-4"><SunIcon /></div>
-                            <h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3>
-                            <p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p>
-                        </div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
                     </div>
                 </div>
             </section>
 
+            {/* --- UPDATED Core Products Section --- */}
             <section id="products" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
-                            <img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/>
-                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div>
-                         </div>
-                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
-                            <img src="https://plus.unsplash.com/premium_photo-1683140737181-27244985237b?q=80&w=2070&auto.format&fit=crop" alt="Solar Inverters" className="w-full h-56 object-cover"/>
-                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Inverters</h3><p className="text-gray-700">Reliable on-grid, off-grid, and hybrid inverters to convert solar energy into usable power for your home or business.</p></div>
-                         </div>
-                         <div className="rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
-                            <img src="https://images.unsplash.com/photo-1560580973-04a1f6a1d8a1?q=80&w=1964&auto.format&fit=crop" alt="Solar Batteries" className="w-full h-56 object-cover"/>
-                            <div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">Battery Storage</h3><p className="text-gray-700">Store excess solar energy with our advanced battery solutions and ensure power during outages.</p></div>
-                         </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                         {coreProducts.map(product => (
+                            <div key={product.id} onClick={() => onProductSelect(product)} className="cursor-pointer rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                                <img src={product.imageUrl} alt={product.name} className="w-full h-64 object-cover"/>
+                                <div className="p-6 bg-white">
+                                    <h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">{product.name}</h3>
+                                    <p className="text-gray-700">{product.description}</p>
+                                </div>
+                            </div>
+                         ))}
                     </div>
+                </div>
+            </section>
+
+            {/* --- NEW Location Map Section --- */}
+            <section id="location" className="py-16 sm:py-24 bg-white">
+                <div className="container mx-auto px-6">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
+                    <div className="rounded-xl shadow-lg overflow-hidden" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
                 </div>
             </section>
 
