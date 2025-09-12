@@ -1928,6 +1928,20 @@ const SupplierManagement = () => {
 
 
 const HomePage = ({ onSignInClick }) => {
+    // The full HTML embed code provided by Canva
+    const canvaEmbedCode = `
+        <div style="position: relative; width: 100%; height: 0; padding-top: 56.2500%;
+        padding-bottom: 0; box-shadow: 0 2px 8px 0 rgba(63,69,81,0.16); margin-top: 1.6em; margin-bottom: 0.9em; overflow: hidden;
+        border-radius: 8px; will-change: transform;">
+        <iframe loading="lazy" style="position: absolute; width: 100%; height: 100%; top: 0; left: 0; border: none; padding: 0;margin: 0;"
+            src="https://www.canva.com/design/DAGyvAbdvRI/TNPuHz5G9w81tACAMGaR_A/view?embed" allowfullscreen="allowfullscreen" allow="fullscreen">
+        </iframe>
+        </div>
+        <a href="https:&#x2F;&#x2F;www.canva.com&#x2F;design&#x2F;DAGyvAbdvRI&#x2F;TNPuHz5G9w81tACAMGaR_A&#x2F;view?utm_content=DAGyvAbdvRI&amp;utm_campaign=designshare&amp;utm_medium=embeds&amp;utm_source=link" target="_blank" rel="noopener" style="display: block; text-align: center; font-size: 12px; padding: 0.5em 0; color: #7f8c8d;">
+        Design by AquaDynamics Chamal
+        </a>
+    `;
+
     return (
         <div className="bg-white text-gray-800">
             <header className="bg-white shadow-md sticky top-0 z-40">
@@ -1936,24 +1950,31 @@ const HomePage = ({ onSignInClick }) => {
                          <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/>
                          <span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House</span>
                     </div>
-                    <div className="hidden md:flex items-center space-x-6"><a href="#products" className="hover:text-yellow-600">Products</a><a href="#services" className="hover:text-yellow-600">Services</a><a href="#about" className="hover:text-yellow-600">About Us</a><a href="#contact" className="hover:text-yellow-600">Contact</a></div>
+                    <div className="hidden md:flex items-center space-x-6">
+                        <a href="#products" className="hover:text-yellow-600">Products</a>
+                        <a href="#services" className="hover:text-yellow-600">Services</a>
+                        <a href="#about" className="hover:text-yellow-600">About Us</a>
+                        <a href="#contact" className="hover:text-yellow-600">Contact</a>
+                    </div>
                     <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full transition duration-300">Staff Sign In</button>
                 </nav>
             </header>
-            <section className="relative h-[60vh] md:h-[80vh] bg-cover bg-center text-white" style={{backgroundImage: "url('https://images.unsplash.com/photo-1508515053969-7b95b8855e14?q=80&w=2070&auto.format&fit=crop')"}}>
-                <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-                <div className="relative container mx-auto px-6 h-full flex flex-col justify-center items-start"><h1 className="text-4xl md:text-6xl font-extrabold leading-tight mb-4 max-w-2xl">Powering Sri Lanka's Future with Sustainable Energy</h1><p className="text-lg md:text-xl mb-8 max-w-xl">Harness the power of the sun with IRN Solar House, your trusted partner for high-quality solar solutions.</p><a href="#contact" className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 px-8 rounded-full transition duration-300 text-lg">Get a Free Quote</a></div>
+
+            {/* --- NEW CANVA PRESENTATION SECTION --- */}
+            <section className="w-full bg-gray-50 py-4 sm:py-6">
+                 <div className="container mx-auto px-4" dangerouslySetInnerHTML={{ __html: canvaEmbedCode }} />
             </section>
-            <section className="py-20 bg-gray-50">
+            
+            <section id="about" className="py-20 bg-white">
                 <div className="container mx-auto px-6 text-center"><h2 className="text-3xl font-bold mb-4">Why Choose IRN Solar House?</h2><p className="text-gray-600 mb-12 max-w-3xl mx-auto">We are committed to providing top-tier solar technology and exceptional service to homes and businesses across Sri Lanka.</p>
                     <div className="grid md:grid-cols-3 gap-12">
-                        <div className="bg-white p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only the best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
-                        <div className="bg-white p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
-                        <div className="bg-white p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only the best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl shadow-lg"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
                     </div>
                 </div>
             </section>
-            <section id="products" className="py-20">
+            <section id="products" className="py-20 bg-gray-50">
                 <div className="container mx-auto px-6"><h2 className="text-3xl font-bold text-center mb-12">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                          <div className="rounded-lg shadow-xl overflow-hidden"><img src="https://images.unsplash.com/photo-1624397843109-c6890d87d468?q=80&w=1974&auto.format&fit=crop" alt="Solar Panels" className="w-full h-56 object-cover"/><div className="p-6 bg-white"><h3 className="text-2xl font-bold mb-2">Solar Panels</h3><p className="text-gray-700">High-efficiency monocrystalline and polycrystalline panels designed for maximum power generation.</p></div></div>
