@@ -1933,7 +1933,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
         {
             id: 'swp-01',
             name: 'Solar Water Pump',
-            imageUrl: 'https://i.imgur.com/bA15N3L.jpeg',
+            imageUrl: 'blob:https://imgur.com/31e95702-44c6-4a51-ad4a-cfe96566bbd5',
             description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.',
             // --- NEW DATA ADDED HERE ---
             keyFeatures: [
@@ -1954,7 +1954,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
         {
             id: 'sac-01',
             name: 'Solar Air Conditioner',
-            imageUrl: 'https://i.imgur.com/P1n4Y7C.jpeg',
+            imageUrl: 'https://i.imgur.com/2XclxRL.jpeg',
             description: 'Stay cool and reduce your electricity bills. Our solar AC units provide sustainable cooling for homes and offices.'
             // Details for this product can be added later
         }
