@@ -35,7 +35,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 // --- Firebase Configuration ---
-const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.appspot.com","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
+const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
 
 let firebaseApp, auth, db, storage;
 try {
@@ -2018,9 +2018,9 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                         We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.
                     </p>
                     <div className="grid md:grid-cols-3 gap-8">
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Electricity Saving</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
                         <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
                         <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Sustainable Savings</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
                     </div>
                 </div>
             </section>
