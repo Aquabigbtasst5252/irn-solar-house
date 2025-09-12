@@ -1931,6 +1931,7 @@ const HomePage = ({ onSignInClick }) => {
 
     useEffect(() => {
         if (videoRef.current) {
+            videoRef.current.load();
             videoRef.current.play().catch(error => {
                 console.error("Video autoplay was prevented:", error);
             });
@@ -1960,17 +1961,27 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- Updated Video Hero Section --- */}
-            <section className="relative h-[65vh] md:h-[85vh] w-full overflow-hidden flex items-center justify-center bg-black"> {/* Added bg-black for a clean letterbox effect */}
+            {/* --- NEW Video Hero Section with Blurred Background --- */}
+            <section className="relative h-[80vh] w-full overflow-hidden bg-black">
+                {/* Blurred Background Video */}
+                <video
+                    autoPlay loop muted playsInline
+                    className="absolute z-0 w-full h-full object-cover blur-xl brightness-75 scale-110"
+                >
+                    <source src="/hero-video-mobile.mp4" media="(max-width: 768px)" />
+                    <source src="/hero-video.mp4" media="(min-width: 769px)" />
+                </video>
+
+                {/* Main, Clear Video (on top) */}
                 <video 
                     ref={videoRef}
-                    src="/hero-video.mp4" 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline
-                    className="z-0 w-full h-full object-contain" // CHANGED from object-cover to object-contain
-                />
+                    autoPlay loop muted playsInline
+                    className="relative z-10 w-full h-full object-contain"
+                >
+                    <source src="/hero-video-mobile.mp4" media="(max-width: 768px)" />
+                    <source src="/hero-video.mp4" media="(min-width: 769px)" />
+                    Your browser does not support the video tag.
+                </video>
             </section>
             
             {/* --- REDESIGNED Sections --- */}
