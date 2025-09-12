@@ -1960,8 +1960,8 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- Updated Video Hero Section (without text/button) --- */}
-            <section className="relative h-[65vh] md:h-[85vh] w-full overflow-hidden flex items-center justify-center"> {/* Added flex for centering */}
+            {/* --- Updated Video Hero Section --- */}
+            <section className="relative h-[65vh] md:h-[85vh] w-full overflow-hidden flex items-center justify-center bg-black"> {/* Added bg-black for a clean letterbox effect */}
                 <video 
                     ref={videoRef}
                     src="/hero-video.mp4" 
@@ -1969,9 +1969,8 @@ const HomePage = ({ onSignInClick }) => {
                     loop 
                     muted 
                     playsInline
-                    className="absolute z-0 w-full h-full object-cover" 
+                    className="z-0 w-full h-full object-contain" // CHANGED from object-cover to object-contain
                 />
-                {/* Removed the text and button div */}
             </section>
             
             {/* --- REDESIGNED Sections --- */}
@@ -2026,9 +2025,9 @@ const HomePage = ({ onSignInClick }) => {
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
                     <div className="max-w-2xl mx-auto text-center">
                         <p className="mb-8 text-lg text-gray-300">Contact us today for a free consultation and quote. Our experts will help you design the perfect solar system for your needs.</p>
-                        <p className="text-xl font-bold">Hotline: +94 77 123 4567</p>
-                        <p className="text-xl font-bold">Email: info@irnsolarhouse.lk</p>
-                        <p className="mt-4 text-gray-400">Or visit us at our office in Negombo, Sri Lanka.</p>
+                        <p className="text-xl font-bold">Hotline: +94 77 750 1836</p>
+                        <p className="text-xl font-bold">Email: easytime1@gmail.com</p>
+                        <p className="mt-4 text-gray-400">No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.</p>
                     </div>
                 </div>
             </section>
