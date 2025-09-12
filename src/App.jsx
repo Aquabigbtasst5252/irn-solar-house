@@ -1933,20 +1933,36 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
         {
             id: 'swp-01',
             name: 'Solar Water Pump',
-            imageUrl: 'https://i.imgur.com/bA15N3L.jpeg', // New Image
-            description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.'
+            imageUrl: 'https://i.imgur.com/bA15N3L.jpeg',
+            description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.',
+            // --- NEW DATA ADDED HERE ---
+            keyFeatures: [
+                'Runs entirely on solar power, no electricity bills',
+                'High-efficiency brushless DC motor for long life',
+                'Durable stainless steel construction',
+                'Automatic operation with water level sensors',
+                'Easy to install and maintain with minimal costs'
+            ],
+            specifications: {
+                'Max Flow Rate': '1,500 Liters/Hour',
+                'Max Head (Lift)': '30 Meters',
+                'Motor Voltage': '24V DC',
+                'Pump Outlet': '1 inch',
+                'Required Solar Panel': '250W (sold separately)'
+            }
         },
         {
             id: 'sac-01',
             name: 'Solar Air Conditioner',
-            imageUrl: 'https://i.imgur.com/P1n4Y7C.jpeg', // New Image
+            imageUrl: 'https://i.imgur.com/P1n4Y7C.jpeg',
             description: 'Stay cool and reduce your electricity bills. Our solar AC units provide sustainable cooling for homes and offices.'
+            // Details for this product can be added later
         }
     ];
 
     const googleMapsEmbedCode = `
         <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.183785244585!2d79.9897009758782!3d7.104445816301121!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae2e5362d2944c3%3A0x6a7a58a221a221e5!2sIRN%20SOLAR%20HOUSE!5e0!3m2!1sen!2slk!4v1726138095493!5m2!1sen!2slk" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-    `; // <-- PASTE YOUR GOOGLE MAPS CODE HERE, REPLACING THIS EXAMPLE
+    `;
 
     useEffect(() => {
         if (videoRef.current) {
@@ -1957,9 +1973,10 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
         }
     }, []);
 
+    // ... (the rest of the HomePage component remains the same)
     return (
         <div className="bg-white text-gray-800 font-sans">
-            {/* --- Header --- */}
+            {/* Header */}
             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
                 <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
                     <div className="flex items-center">
@@ -1980,6 +1997,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                 </nav>
             </header>
 
+            {/* Video Hero Section */}
             <section className="relative h-[80vh] w-full overflow-hidden bg-black">
                 <video autoPlay loop muted playsInline className="absolute z-0 w-full h-full object-cover blur-xl brightness-75 scale-110">
                     <source src="/hero-video-mobile.mp4" media="(max-width: 768px)" />
@@ -1992,6 +2010,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                 </video>
             </section>
             
+            {/* About Section */}
             <section id="about" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">Why Choose IRN Solar House?</h2>
@@ -2006,7 +2025,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                 </div>
             </section>
 
-            {/* --- UPDATED Core Products Section --- */}
+            {/* Core Products Section */}
             <section id="products" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
@@ -2024,7 +2043,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                 </div>
             </section>
 
-            {/* --- NEW Location Map Section --- */}
+            {/* Location Map Section */}
             <section id="location" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
@@ -2032,6 +2051,7 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                 </div>
             </section>
 
+            {/* Contact Section */}
             <section id="contact" className="py-20 bg-gray-800 text-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
