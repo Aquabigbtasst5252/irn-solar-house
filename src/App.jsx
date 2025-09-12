@@ -1927,7 +1927,22 @@ const SupplierManagement = () => {
 };
 
 
+import React, { useRef, useEffect } from 'react'; // Make sure to import useRef and useEffect
+// ... (keep all the other icon imports)
+
 const HomePage = ({ onSignInClick }) => {
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+        // This attempts to play the video as soon as the component is ready.
+        if (videoRef.current) {
+            videoRef.current.play().catch(error => {
+                // Autoplay was prevented.
+                console.error("Video autoplay was prevented:", error);
+            });
+        }
+    }, []);
+
     return (
         <div className="bg-white text-gray-800 font-sans">
             {/* --- Header --- */}
@@ -1942,7 +1957,6 @@ const HomePage = ({ onSignInClick }) => {
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
                     </div>
-                    {/* UPDATED: Mobile responsive button */}
                     <button 
                         onClick={onSignInClick} 
                         className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300"
@@ -1952,13 +1966,15 @@ const HomePage = ({ onSignInClick }) => {
                 </nav>
             </header>
 
-            {/* --- NEW Video Hero Section --- */}
+            {/* --- NEW Video Hero Section with programmatic play --- */}
             <section className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden">
                 <video 
-                    src="/hero-video.mp4" // Make sure the path matches your video file in the /public folder
+                    ref={videoRef} // Reference for JavaScript control
+                    src="/hero-video.mp4" 
                     autoPlay 
                     loop 
                     muted 
+                    playsInline // Essential for iOS autoplay
                     className="absolute z-0 w-full h-full object-cover"
                 />
                 <div className="relative z-10 h-full flex flex-col justify-center items-center text-center bg-black/50 p-4">
@@ -2037,7 +2053,6 @@ const HomePage = ({ onSignInClick }) => {
         </div>
     );
 };
-
 // --- Main App & Dashboard Structure ---
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('import_dashboard');
