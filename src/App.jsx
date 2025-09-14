@@ -22,7 +22,8 @@ import {
   Timestamp,
   writeBatch,
   query,
-  orderBy
+  orderBy,
+  where
 } from 'firebase/firestore';
 import {
     getStorage,
@@ -46,15 +47,34 @@ try {
   storage = getStorage(firebaseApp);
 } catch (error) { console.error("Error initializing Firebase:", error); }
 
+// --- Routing Hook & Parser ---
+const useHash = () => {
+    const [hash, setHash] = useState(window.location.hash);
+    const onHashChange = useCallback(() => setHash(window.location.hash), []);
+    useEffect(() => {
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+    }, [onHashChange]);
+    return hash;
+};
+
+const parseRoute = (hash) => {
+    const path = hash.substring(1) || '/';
+    const parts = path.split('/').filter(p => p);
+    if (parts[0] === 'signin') return { view: 'signin' };
+    if (parts[0] === 'forgot-password') return { view: 'forgot-password' };
+    if (parts[0] === 'products' && parts[1]) return { view: 'product-category', categoryId: parts[1] };
+    if (parts[0] === 'product-detail' && parts[1]) return { view: 'product-detail', productId: parts[1] };
+    return { view: 'homepage' };
+};
+
+
 // --- Helper Functions & Data ---
 const getUserProfile = async (uid) => {
   if (!db) return null;
   const userDocRef = doc(db, 'users', uid);
   const userDocSnap = await getDoc(userDocRef);
-  if (userDocSnap.exists()) {
-    return userDocSnap.data();
-  }
-  return null;
+  return userDocSnap.exists() ? userDocSnap.data() : null;
 };
 const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
@@ -130,6 +150,7 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
     {children}
   </div>
 );
+
 const SignIn = ({ setView, onLoginSuccess }) => {
   const [error, setError] = useState('');
 
@@ -713,6 +734,7 @@ const StockManagement = ({ onViewImport }) => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         setUploadProgress(0);
+        setError('');
         let dataToSave = { ...formData };
         try {
             if (dataToSave.pictureFile) {
@@ -731,7 +753,24 @@ const StockManagement = ({ onViewImport }) => {
             await fetchStockAndShops(); // Refresh data
             setIsModalOpen(false);
             setFormData({});
-        } catch (err) { setError("Failed to save stock item. Check console for details."); console.error(err); }
+        } catch (err) { 
+            console.error("Save error:", err);
+            let userMessage = "Failed to save stock item. Please check the console for details.";
+            if (err.code) {
+                switch (err.code) {
+                    case 'storage/unauthorized':
+                        userMessage = "Permission Error: You do not have rights to upload images. Please contact an administrator.";
+                        break;
+                    case 'permission-denied': // Firestore permission error
+                        userMessage = "Permission Error: You do not have rights to save stock data. Please contact an administrator.";
+                        break;
+                    default:
+                        userMessage = `An error occurred: ${err.message}`;
+                        break;
+                }
+            }
+            setError(userMessage);
+        }
         finally { setUploadProgress(0); }
     };
 
@@ -838,10 +877,11 @@ const StockManagement = ({ onViewImport }) => {
     );
 
     if(loading) return <div className="p-8 text-center">Loading Stock...</div>;
-    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+    
 
     return (
         <div className="p-4 sm:p-8">
+             {error && <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert"><span className="font-medium">Error:</span> {error}</div>}
              <Modal isOpen={isBreakdownModalOpen} onClose={() => setIsBreakdownModalOpen(false)} size="lg">
                  <h3 className="text-xl font-bold mb-4">Stock Breakdown for {breakdownData.itemName}</h3>
                  {modalLoading ? <p>Calculating...</p> : (
@@ -941,7 +981,7 @@ const StockManagement = ({ onViewImport }) => {
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by item name or model..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
                 <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-left">Status</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
-                    <tbody>{stock.map(item => {
+                    <tbody>{filteredStock.map(item => {
                         const atReorderLevel = item.reorderLevel && (item.qty <= item.reorderLevel);
                         return (
                         <tr key={item.id} className={`border-b hover:bg-gray-100 ${atReorderLevel ? 'bg-red-50' : ''}`}>
@@ -1349,8 +1389,24 @@ const ProductManagement = ({ currentUser }) => {
     const [productSearchTerm, setProductSearchTerm] = useState(''); // State for the new search bar
     const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
     const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
+    const [letterheadBase64, setLetterheadBase64] = useState('');
 
-    const letterheadBase64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAMgA8ADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD6pooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKK-";
+    useEffect(() => {
+        const fetchLetterhead = async () => {
+            try {
+                const response = await fetch('/IRN Solar House.png'); // Fetches from public folder
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setLetterheadBase64(reader.result);
+                };
+                reader.readAsDataURL(blob);
+            } catch (error) {
+                console.error("Failed to load letterhead image:", error);
+            }
+        };
+        fetchLetterhead();
+    }, []);
 
     const initialFormData = {
         name: '',
@@ -1531,6 +1587,11 @@ const ProductManagement = ({ currentUser }) => {
             alert("You don't have permission to export cost sheets.");
             return;
         }
+        if (!letterheadBase64) {
+            alert("Letterhead image is not loaded yet. Please wait and try again.");
+            return;
+        }
+
         try {
             const doc = new jsPDF('p', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.getWidth();
@@ -1539,10 +1600,9 @@ const ProductManagement = ({ currentUser }) => {
             const topMargin = 45;
             const leftMargin = 20;
             const rightMargin = 15;
-            const contentWidth = pageWidth - leftMargin - rightMargin;
 
             const addLetterhead = () => {
-                doc.addImage(letterheadBase64, 'JPEG', 0, 0, pageWidth, pageHeight);
+                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
             };
 
             addLetterhead();
@@ -1926,6 +1986,132 @@ const SupplierManagement = () => {
     );
 };
 
+// ====================================================================================
+// --- NEW WEBSITE MANAGEMENT COMPONENT ---
+// ====================================================================================
+const WebsiteManagementPortal = () => {
+    const [content, setContent] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+
+    const contentDocRef = useMemo(() => doc(db, 'website_content', 'homepage'), []);
+
+    const fetchContent = useCallback(async () => {
+        setLoading(true);
+        try {
+            const docSnap = await getDoc(contentDocRef);
+            if (docSnap.exists()) {
+                setContent(docSnap.data());
+            } else {
+                // Initialize with default structure if it doesn't exist
+                const defaultContent = {
+                    whyChooseTitle: "Why Choose IRN Solar House?",
+                    whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
+                    feature1Title: "Electricity Saving",
+                    feature1Text: "Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.",
+                    feature2Title: "Premium Quality Products",
+                    feature2Text: "We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.",
+                    feature3Title: "Expert Installation",
+                    feature3Text: "Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.",
+                    contactHotline: "+94 77 750 1836",
+                    contactEmail: "easytime1@gmail.com",
+                    contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
+                };
+                setContent(defaultContent);
+            }
+        } catch (err) {
+            console.error("Error fetching website content:", err);
+            setError("Failed to load website content.");
+        } finally {
+            setLoading(false);
+        }
+    }, [contentDocRef]);
+
+    useEffect(() => {
+        fetchContent();
+    }, [fetchContent]);
+
+    const handleInputChange = (e, featureIndex) => {
+        const { name, value } = e.target;
+        setContent(prev => ({...prev, [name]: value}));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError('');
+        setSuccess('');
+        try {
+            await setDoc(contentDocRef, content, { merge: true });
+            setSuccess("Website content updated successfully!");
+            setTimeout(() => setSuccess(''), 3000); // Clear message after 3s
+        } catch (err) {
+            console.error("Error saving website content:", err);
+            setError("Failed to save content. Please check permissions and try again.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+    if (!content) return <div className="p-8 text-center">No content found. Could not initialize.</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Website Homepage Management</h2>
+                <button onClick={handleSave} disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">
+                    {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
+            {success && <div className="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
+
+            <div className="bg-white p-6 rounded-xl shadow-lg space-y-8">
+                <fieldset className="p-4 border rounded-md">
+                    <legend className="font-semibold px-2 text-lg">"Why Choose Us" Section</legend>
+                    <div className="space-y-4">
+                        <div><label className="block text-sm font-medium text-gray-700">Section Title</label><input type="text" name="whyChooseTitle" value={content.whyChooseTitle} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                        <div><label className="block text-sm font-medium text-gray-700">Section Subtitle</label><textarea name="whyChooseSubtitle" value={content.whyChooseSubtitle} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="2"></textarea></div>
+                    </div>
+                </fieldset>
+
+                <fieldset className="p-4 border rounded-md">
+                    <legend className="font-semibold px-2 text-lg">Features</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                            <h4 className="font-bold">Feature 1</h4>
+                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature1Title" value={content.feature1Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature1Text" value={content.feature1Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
+                        </div>
+                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                            <h4 className="font-bold">Feature 2</h4>
+                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature2Title" value={content.feature2Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature2Text" value={content.feature2Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
+                        </div>
+                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                            <h4 className="font-bold">Feature 3</h4>
+                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature3Title" value={content.feature3Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature3Text" value={content.feature3Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
+                        </div>
+                    </div>
+                </fieldset>
+                
+                <fieldset className="p-4 border rounded-md">
+                    <legend className="font-semibold px-2 text-lg">Contact Information</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div><label className="block text-sm font-medium text-gray-700">Hotline</label><input type="text" name="contactHotline" value={content.contactHotline} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                         <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="contactEmail" value={content.contactEmail} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">Address</label><input type="text" name="contactAddress" value={content.contactAddress} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+    );
+};
+
+
 // --- NEW Product Detail Page Component ---
 const ProductDetailPage = ({ product, onBack }) => {
     if (!product) return null;
@@ -1995,7 +2181,23 @@ const ProductDetailPage = ({ product, onBack }) => {
     );
 };
 
-const HomePage = ({ onSignInClick, onProductSelect }) => {
+const HomePage = ({ onSignInClick, onProductSelect, content }) => {
+    const defaultContent = {
+        whyChooseTitle: "Why Choose IRN Solar House?",
+        whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
+        feature1Title: "Electricity Saving",
+        feature1Text: "Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.",
+        feature2Title: "Premium Quality Products",
+        feature2Text: "We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.",
+        feature3Title: "Expert Installation",
+        feature3Text: "Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.",
+        contactHotline: "+94 77 750 1836",
+        contactEmail: "easytime1@gmail.com",
+        contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
+    };
+
+    const pageContent = content || defaultContent;
+
     const coreProducts = [
         {
             id: 'swp-01',
@@ -2061,28 +2263,24 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                     playsInline 
                     className="absolute z-0 w-full h-full object-cover"
                 >
-                    <source src="https://storage.googleapis.com/static.irnsolarhouse.com/hero-video-mobile.mp4" type="video/mp4" media="(max-width: 768px)" />
-                    <source src="https://storage.googleapis.com/static.irnsolarhouse.com/hero-video-desktop.mp4" type="video/mp4" media="(min-width: 769px)" />
+                    <source src="/hero-video.mp4" type="video/mp4" />
                     Your browser does not support the video tag.
                 </video>
-                <div className="absolute z-10 w-full h-full bg-black bg-opacity-50"></div>
-                <div className="relative z-20 text-center px-4">
-                    <h1 className="text-4xl md:text-6xl font-extrabold mb-4" style={{textShadow: '2px 2px 8px rgba(0,0,0,0.7)'}}>Powering a Brighter, Greener Future</h1>
-                    <p className="text-lg md:text-xl max-w-3xl mx-auto" style={{textShadow: '1px 1px 4px rgba(0,0,0,0.7)'}}>Harness the power of the sun with Sri Lanka's leading solar solutions provider.</p>
-                </div>
+                <div className="absolute z-10 w-full h-full bg-black bg-opacity-40"></div>
+                {/* Text Overlay Removed as requested */}
             </section>
             
             {/* About Section */}
             <section id="about" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6 text-center">
-                    <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">Why Choose IRN Solar House?</h2>
+                    <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">{pageContent.whyChooseTitle}</h2>
                     <p className="text-gray-600 mb-16 max-w-3xl mx-auto text-lg">
-                        We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.
+                        {pageContent.whyChooseSubtitle}
                     </p>
                     <div className="grid md:grid-cols-3 gap-8">
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">Electricity Saving</h3><p className="text-gray-600">Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.</p></div>
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">Premium Quality Products</h3><p className="text-gray-600">We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.</p></div>
-                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">Expert Installation</h3><p className="text-gray-600">Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">{pageContent.feature1Title}</h3><p className="text-gray-600">{pageContent.feature1Text}</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">{pageContent.feature2Title}</h3><p className="text-gray-600">{pageContent.feature2Text}</p></div>
+                        <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><WrenchScrewdriverIcon /></div><h3 className="text-xl font-semibold mb-2">{pageContent.feature3Title}</h3><p className="text-gray-600">{pageContent.feature3Text}</p></div>
                     </div>
                 </div>
             </section>
@@ -2119,9 +2317,9 @@ const HomePage = ({ onSignInClick, onProductSelect }) => {
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
                     <div className="max-w-2xl mx-auto text-center">
                         <p className="mb-8 text-lg text-gray-300">Contact us today for a free consultation and quote. Our experts will help you design the perfect solar system for your needs.</p>
-                        <p className="text-xl font-bold">Hotline: +94 77 750 1836</p>
-                        <p className="text-xl font-bold">Email: easytime1@gmail.com</p>
-                        <p className="mt-4 text-gray-400">No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.</p>
+                        <p className="text-xl font-bold">Hotline: {pageContent.contactHotline}</p>
+                        <p className="text-xl font-bold">Email: {pageContent.contactEmail}</p>
+                        <p className="mt-4 text-gray-400">{pageContent.contactAddress}</p>
                     </div>
                 </div>
             </section>
@@ -2186,6 +2384,7 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
+            case 'website_management': return <WebsiteManagementPortal />;
             default: return (<div>Welcome!</div>);
         }
     };
@@ -2221,8 +2420,11 @@ const Dashboard = ({ user, onSignOut }) => {
                         {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
                             {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
                         </div>)}
-                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
-                            {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="user_management">User Management</NavLink></div>}
+                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') || currentView.startsWith('website_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
+                            {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                                <NavLink view="user_management">User Management</NavLink>
+                                <NavLink view="website_management">Website Content</NavLink>
+                                </div>}
                         </div>)}
                     </nav>
                 </div>
@@ -2237,6 +2439,23 @@ export default function App() {
   const [view, setView] = useState('homepage');
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [homepageContent, setHomepageContent] = useState(null);
+
+  useEffect(() => {
+    // Fetch website content for the public homepage
+    const fetchWebsiteContent = async () => {
+        try {
+            const contentDocRef = doc(db, 'website_content', 'homepage');
+            const docSnap = await getDoc(contentDocRef);
+            if (docSnap.exists()) {
+                setHomepageContent(docSnap.data());
+            }
+        } catch (error) {
+            console.error("Could not fetch homepage content:", error);
+        }
+    };
+    fetchWebsiteContent();
+  }, []);
 
   useEffect(() => {
     if (!auth) { setLoading(false); return; }
@@ -2275,7 +2494,7 @@ export default function App() {
             return <ProductDetailPage product={selectedProduct} onBack={() => { setView('homepage'); setSelectedProduct(null); }} />;
           case 'homepage': 
           default: 
-            return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} />;
+            return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} content={homepageContent} />;
       }
   };
 
