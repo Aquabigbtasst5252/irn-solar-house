@@ -1967,7 +1967,7 @@ const SupplierManagement = () => {
 };
 
 // ====================================================================================
-// --- NEW WEBSITE MANAGEMENT COMPONENT ---
+// --- NEW WEBSITE MANAGEMENT COMPONENT (UPDATED) ---
 // ====================================================================================
 const WebsiteManagementPortal = ({ currentUser }) => {
     const [content, setContent] = useState(null);
@@ -1994,7 +1994,15 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                 if (contentSnap.exists()) {
                     setContent(contentSnap.data());
                 } else {
-                    setContent({ mapEmbedURL: '' }); // Default
+                    // Initialize with default empty fields if it doesn't exist
+                    setContent({ 
+                        mapEmbedURL: '',
+                        whyChooseTitle: '', whyChooseSubtitle: '',
+                        feature1Title: '', feature1Text: '',
+                        feature2Title: '', feature2Text: '',
+                        feature3Title: '', feature3Text: '',
+                        contactHotline: '', contactEmail: '', contactAddress: ''
+                    });
                 }
 
                 // Fetch product categories
@@ -2029,19 +2037,21 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     
     const handleSaveGeneralContent = async () => {
         setSaving(true);
+        setError('');
+        setSuccess('');
         try {
             const contentDocRef = doc(db, 'website_content', 'homepage');
             await setDoc(contentDocRef, content, { merge: true });
-            setSuccess("General content saved!");
+            setSuccess("General content saved successfully!");
             setTimeout(() => setSuccess(''), 3000);
         } catch(err) {
-            setError("Failed to save general content.");
+            setError("Failed to save general content. Please check permissions.");
         } finally {
             setSaving(false);
         }
     };
     
-    // --- Model Management Functions ---
+    // --- Model Management Functions (No changes needed here) ---
     const openAddModelModal = (category) => {
         setCurrentCategory(category);
         setCurrentModel({ name: '', description: '', price: 0, imageUrl: '', imagePath: '' });
@@ -2080,7 +2090,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
         };
 
         try {
-            // Handle image upload if a new file is present
             if (currentModel.imageFile) {
                 const filePath = `public_products/${currentCategory.id}/${Date.now()}_${currentModel.imageFile.name}`;
                 const storageRef = ref(storage, filePath);
@@ -2094,7 +2103,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                             modelData.imageUrl = downloadURL;
                             modelData.imagePath = filePath;
-                             // If it's an edit and there was an old image, delete it
                             if (currentModel.id && currentModel.imagePath) {
                                 await deleteObject(ref(storage, currentModel.imagePath));
                             }
@@ -2105,14 +2113,12 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             }
 
             const collectionRef = collection(db, 'product_categories', currentCategory.id, 'models');
-            if (currentModel.id) { // Editing existing model
-                const docRef = doc(collectionRef, currentModel.id);
-                await updateDoc(docRef, modelData);
-            } else { // Adding new model
+            if (currentModel.id) {
+                await updateDoc(doc(collectionRef, currentModel.id), modelData);
+            } else {
                 modelData.createdAt = Timestamp.now();
                 await addDoc(collectionRef, modelData);
             }
-            // Simple refresh
             window.location.reload();
         } catch (err) {
             console.error("Failed to save model", err);
@@ -2127,13 +2133,10 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const handleDeleteModel = async (category, model) => {
         if (window.confirm(`Are you sure you want to delete the model "${model.name}"? This action cannot be undone.`)) {
              try {
-                // Delete the image from storage first
                 if (model.imagePath) {
                     await deleteObject(ref(storage, model.imagePath));
                 }
-                // Delete the document from Firestore
                 await deleteDoc(doc(db, 'product_categories', category.id, 'models', model.id));
-                // Simple refresh
                 window.location.reload();
              } catch (err) {
                 console.error("Failed to delete model", err);
@@ -2144,8 +2147,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
 
 
     if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
+    
     return (
         <div className="p-4 sm:p-8 space-y-8">
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="2xl">
@@ -2163,16 +2165,41 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             
             <div className="flex justify-between items-center"><h2 className="text-3xl font-bold text-gray-800">Website Content Management</h2></div>
             {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
+            {error && <div className="p-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">General Settings</h3>
-                <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Google Maps Embed URL</label>
-                      <input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Paste the src URL from the Google Maps embed code"/>
-                    </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Homepage Content</h3>
+                <div className="space-y-6">
+                    {/* "Why Choose Us" Section */}
+                    <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">'Why Choose Us' Section</legend>
+                        <div className="space-y-4">
+                            <div><label className="block text-sm font-medium">Main Title</label><input type="text" name="whyChooseTitle" value={content?.whyChooseTitle || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Subtitle</label><textarea name="whyChooseSubtitle" value={content?.whyChooseSubtitle || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-sm font-medium">Feature 1 Title</label><input type="text" name="feature1Title" value={content?.feature1Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 1 Text</label><input type="text" name="feature1Text" value={content?.feature1Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div><label className="block text-sm font-medium">Feature 2 Title</label><input type="text" name="feature2Title" value={content?.feature2Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 2 Text</label><input type="text" name="feature2Text" value={content?.feature2Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div><label className="block text-sm font-medium">Feature 3 Title</label><input type="text" name="feature3Title" value={content?.feature3Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 3 Text</label><input type="text" name="feature3Text" value={content?.feature3Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    {/* Contact & Location Section */}
+                     <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">Contact & Location</legend>
+                        <div className="space-y-4">
+                            <div><label className="block text-sm font-medium">Hotline Number</label><input type="text" name="contactHotline" value={content?.contactHotline || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Email Address</label><input type="email" name="contactEmail" value={content?.contactEmail || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Physical Address</label><textarea name="contactAddress" value={content?.contactAddress || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                            <div><label className="block text-sm font-medium">Google Maps Embed URL</label><input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" placeholder="Paste the src URL from Google Maps"/></div>
+                        </div>
+                    </fieldset>
+
                     <div className="flex justify-end">
-                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save General Settings'}</button>
+                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save All Homepage Content'}</button>
                     </div>
                 </div>
             </div>
@@ -2180,7 +2207,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             {categories.map(category => (
                 <div key={category.id} className="bg-white p-6 rounded-xl shadow-lg">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h3 className="text-xl font-bold text-gray-800">Manage: {category.name}</h3>
+                        <h3 className="text-xl font-bold text-gray-800">Manage Products In: {category.name}</h3>
                         <button onClick={() => openAddModelModal(category)} className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-700"><PlusCircleIcon className="w-5 h-5 mr-1"/> Add Model</button>
                     </div>
                     <div className="overflow-x-auto">
@@ -2209,97 +2236,9 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     );
 };
 
-// --- NEW Product Category Page Component ---
-const ProductCategoryPage = ({ categoryId, onBack }) => {
-    const [category, setCategory] = useState(null);
-    const [models, setModels] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!categoryId) return;
-        
-        const fetchCategoryData = async () => {
-            setLoading(true);
-            try {
-                // Fetch category details
-                const categoryDocRef = doc(db, 'product_categories', categoryId);
-                const categorySnap = await getDoc(categoryDocRef);
-                if (categorySnap.exists()) {
-                    setCategory(categorySnap.data());
-                }
-
-                // Fetch models in the category
-                const modelsQuery = query(collection(db, 'product_categories', categoryId, 'models'), orderBy('createdAt', 'desc'));
-                const modelsSnap = await getDocs(modelsQuery);
-                setModels(modelsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-            } catch (error) {
-                console.error("Error fetching category data:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchCategoryData();
-    }, [categoryId]);
-
-    if (loading) {
-        return <div className="min-h-screen flex items-center justify-center">Loading Products...</div>;
-    }
-
-    if (!category) {
-        return <div className="min-h-screen flex items-center justify-center">Category not found.</div>;
-    }
-    
-    return (
-        <div className="bg-gray-50 min-h-screen font-sans">
-             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
-                <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-                    <div className="flex items-center">
-                         <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-10 sm:h-12 w-auto"/>
-                         <span className="ml-3 font-semibold text-lg sm:text-xl text-gray-800">IRN Solar House</span>
-                    </div>
-                    <button 
-                        onClick={onBack} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300"
-                    >
-                        ← Back to Home
-                    </button>
-                </nav>
-            </header>
-
-            <main className="container mx-auto px-4 sm:px-6 py-12">
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">{category.name}</h1>
-                    <p className="text-lg text-gray-600 max-w-3xl mx-auto">{category.description}</p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {models.map(model => (
-                        <div key={model.id} className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col">
-                           <img src={model.imageUrl} alt={model.name} className="w-full h-56 object-cover"/>
-                           <div className="p-6 flex flex-col flex-grow">
-                              <h2 className="text-2xl font-bold text-gray-800 mb-2">{model.name}</h2>
-                              <p className="text-gray-600 mb-4 flex-grow">{model.description}</p>
-                              <p className="text-3xl font-bold text-green-600 mt-auto">LKR {model.price.toLocaleString()}</p>
-                           </div>
-                        </div>
-                    ))}
-                </div>
-                {models.length === 0 && (
-                    <div className="text-center py-16">
-                        <h2 className="text-2xl font-semibold text-gray-700">No Models Available</h2>
-                        <p className="text-gray-500 mt-2">Please check back later for available products in this category.</p>
-                    </div>
-                )}
-            </main>
-            <footer className="bg-gray-900 text-white py-6 mt-12"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
-        </div>
-    );
-};
-
 
 const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
+    // Default content in case Firestore data is not yet loaded or available
     const defaultContent = {
         whyChooseTitle: "Why Choose IRN Solar House?",
         whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
@@ -2312,15 +2251,16 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
         contactHotline: "+94 77 750 1836",
         contactEmail: "easytime1@gmail.com",
         contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
-        mapEmbedURL: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.183785244585!2d79.9897009758782!3d7.104445816301121!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae2e5362d2944c3%3A0x6a7a58a221a221e5!2sIRN%20SOLAR%20HOUSE!5e0!3m2!1sen!2slk!4v1726138095493!5m2!1sen!2slk"
+        mapEmbedURL: ""
     };
 
     const pageContent = content || defaultContent;
-    const googleMapsEmbedCode = `<iframe src="${pageContent.mapEmbedURL}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    const googleMapsEmbedCode = pageContent.mapEmbedURL 
+        ? `<iframe src="${pageContent.mapEmbedURL}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+        : '<p class="text-center p-8 bg-gray-100">Map not available. Please configure the map URL in the admin panel.</p>';
 
     return (
         <div className="bg-white text-gray-800 font-sans">
-            {/* Header */}
             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
                 <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
                     <div className="flex items-center">
@@ -2332,37 +2272,24 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
                     </div>
-                    <button 
-                        onClick={onSignInClick} 
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300"
-                    >
+                    <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
                         Staff Sign In
                     </button>
                 </nav>
             </header>
 
-            {/* Video Hero Section */}
             <section className="relative h-screen w-full flex items-center justify-center text-white overflow-hidden">
-                <video 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline 
-                    className="absolute z-0 w-full h-full object-cover"
-                >
+                <video autoPlay loop muted playsInline className="absolute z-0 w-full h-full object-cover">
                     <source src="/hero-video.mp4" type="video/mp4" />
                     Your browser does not support the video tag.
                 </video>
-                <div className="absolute z-10 w-full h-full bg-black bg-opacity-40"></div>
+                {/* THIS DIV WAS REMOVED: <div className="absolute z-10 w-full h-full bg-black bg-opacity-40"></div> */}
             </section>
             
-            {/* About Section */}
             <section id="about" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">{pageContent.whyChooseTitle}</h2>
-                    <p className="text-gray-600 mb-16 max-w-3xl mx-auto text-lg">
-                        {pageContent.whyChooseSubtitle}
-                    </p>
+                    <p className="text-gray-600 mb-16 max-w-3xl mx-auto text-lg">{pageContent.whyChooseSubtitle}</p>
                     <div className="grid md:grid-cols-3 gap-8">
                         <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><SunIcon /></div><h3 className="text-xl font-semibold mb-2">{pageContent.feature1Title}</h3><p className="text-gray-600">{pageContent.feature1Text}</p></div>
                         <div className="bg-gray-50 p-8 rounded-xl transition-shadow hover:shadow-xl"><div className="flex justify-center mb-4"><ShieldCheckIcon /></div><h3 className="text-xl font-semibold mb-2">{pageContent.feature2Title}</h3><p className="text-gray-600">{pageContent.feature2Text}</p></div>
@@ -2371,7 +2298,6 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            {/* Core Products Section */}
             <section id="products" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
@@ -2389,15 +2315,14 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            {/* Location Map Section */}
-            <section id="location" className="py-16 sm:py-24 bg-white">
+           <section id="location" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
-                    <div className="rounded-xl shadow-lg overflow-hidden" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
                 </div>
+                {/* The map container is now outside the centered 'div', allowing it to be full-width */}
+                <div className="w-full" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
             </section>
 
-            {/* Contact Section */}
             <section id="contact" className="py-20 bg-gray-800 text-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
