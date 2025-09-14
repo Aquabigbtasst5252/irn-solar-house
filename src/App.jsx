@@ -1356,7 +1356,618 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
     );
 };
 // ====================================================================================
-// --- WEBSITE MANAGEMENT COMPONENT (CORRECTED) ---
+// --- PRODUCT MANAGEMENT COMPONENT ---
+// ====================================================================================
+const ProductManagement = ({ currentUser }) => {
+    const [view, setView] = useState('list'); // 'list', 'form'
+    const [products, setProducts] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+    const [stockSearchTerm, setStockSearchTerm] = useState('');
+    const [productSearchTerm, setProductSearchTerm] = useState(''); // State for the new search bar
+    const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
+    const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
+    const [letterheadBase64, setLetterheadBase64] = useState('');
+
+    useEffect(() => {
+        const fetchLetterhead = async () => {
+            try {
+                const response = await fetch('/IRN Solar House.png'); // Fetches from public folder
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setLetterheadBase64(reader.result);
+                };
+                reader.readAsDataURL(blob);
+            } catch (error) {
+                console.error("Failed to load letterhead image:", error);
+            }
+        };
+        fetchLetterhead();
+    }, []);
+
+    const initialFormData = {
+        name: '',
+        description: '',
+        serialNumber: '',
+        items: [],
+        costing: {
+            employeeSalary: 0,
+            delivery: 0,
+            commission: 0,
+            serviceCharge: 0,
+            rent: 0,
+            profit: 10,
+        },
+    };
+    const [formData, setFormData] = useState(initialFormData);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [productsSnap, stockSnap] = await Promise.all([
+                getDocs(query(collection(db, 'products'), orderBy('createdAt', 'desc'))),
+                getDocs(collection(db, 'import_stock')),
+            ]);
+            setProducts(productsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            
+            const stockItemsWithCost = await Promise.all(stockSnap.docs.map(async (doc) => {
+                const item = { id: doc.id, ...doc.data() };
+                const serialsSnap = await getDocs(query(collection(db, 'import_stock', item.id, 'serials'), orderBy('purchaseDate', 'desc')));
+                const latestSerial = serialsSnap.empty ? null : serialsSnap.docs[0].data();
+                return { ...item, avgCostLKR: latestSerial?.finalCostLKR || 0 };
+            }));
+
+            setStockItems(stockItemsWithCost);
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load product data.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleCreateNew = () => {
+        setIsEditing(false);
+        setFormData({
+            ...initialFormData,
+            serialNumber: `PROD-${Date.now().toString().slice(-8)}`,
+        });
+        setView('form');
+    };
+
+    const handleEdit = (product) => {
+        setIsEditing(true);
+        setFormData(product);
+        setView('form');
+    };
+
+    const handleDelete = async (productId) => {
+        if (currentUser.role !== 'super_admin') {
+            alert("You don't have permission to delete products.");
+            return;
+        }
+        if (window.confirm('Are you sure you want to delete this product definition?')) {
+            try {
+                await deleteDoc(doc(db, 'products', productId));
+                setProducts(prev => prev.filter(p => p.id !== productId));
+            } catch (err) {
+                console.error(err);
+                setError('Failed to delete product.');
+            }
+        }
+    };
+    
+    const handleFormInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleCostingChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            costing: { ...prev.costing, [name]: parseFloat(value) || 0 }
+        }));
+    };
+    
+    const handleAddItemToProduct = (stockItem) => {
+        if (formData.items.some(i => i.stockItemId === stockItem.id)) return;
+        const newItem = {
+            stockItemId: stockItem.id,
+            name: stockItem.name,
+            model: stockItem.model,
+            avgCostLKR: stockItem.avgCostLKR,
+            qty: 1
+        };
+        setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
+    };
+
+    const handleRemoveItemFromProduct = (stockItemId) => {
+        setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.stockItemId !== stockItemId)}));
+    };
+
+    const handleItemQuantityChange = (stockItemId, newQty) => {
+        setFormData(prev => ({
+            ...prev,
+            items: prev.items.map(item => item.stockItemId === stockItemId ? {...item, qty: parseFloat(newQty) || 0} : item)
+        }));
+    };
+
+    const calculatedCosts = useMemo(() => {
+        const rawMaterialCost = formData.items.reduce((acc, item) => acc + (item.qty * item.avgCostLKR), 0);
+        let totalCost = rawMaterialCost;
+        const costBreakdown = { rawMaterialCost };
+
+        Object.entries(formData.costing).forEach(([key, value]) => {
+            if (key !== 'profit') {
+                const costValue = rawMaterialCost * (value / 100);
+                totalCost += costValue;
+                costBreakdown[key] = costValue;
+            }
+        });
+
+        const profitAmount = totalCost * (formData.costing.profit / 100);
+        const finalUnitPrice = totalCost + profitAmount;
+        costBreakdown.profit = profitAmount;
+        costBreakdown.totalCost = totalCost;
+        return { rawMaterialCost, finalUnitPrice, costBreakdown };
+    }, [formData.items, formData.costing]);
+
+    const handleSave = async () => {
+        if (!formData.name || formData.items.length === 0) {
+            alert('Product name and at least one item are required.');
+            return;
+        }
+        
+        const userInfo = {
+            uid: currentUser.uid,
+            displayName: currentUser.displayName || currentUser.email,
+        };
+
+        const dataToSave = {
+            ...formData,
+            finalUnitPrice: calculatedCosts.finalUnitPrice,
+            rawMaterialCost: calculatedCosts.rawMaterialCost,
+            costBreakdown: calculatedCosts.costBreakdown,
+            updatedAt: Timestamp.now(),
+            lastUpdatedBy: userInfo,
+        };
+
+        try {
+            if (isEditing) {
+                const docRef = doc(db, 'products', formData.id);
+                await updateDoc(docRef, dataToSave);
+            } else {
+                dataToSave.createdAt = Timestamp.now();
+                dataToSave.createdBy = userInfo;
+                await addDoc(collection(db, 'products'), dataToSave);
+            }
+            fetchData();
+            setView('list');
+        } catch (err) {
+            console.error(err);
+            setError("Failed to save product.");
+        }
+    };
+    
+    const openCostSheet = (product) => {
+        setSelectedProductForCostSheet(product);
+        setIsCostSheetModalOpen(true);
+    };
+
+    const exportCostSheetPDF = async (product) => {
+        if (!['super_admin', 'admin'].includes(currentUser.role)) {
+            alert("You don't have permission to export cost sheets.");
+            return;
+        }
+        if (!letterheadBase64) {
+            alert("Letterhead image is not loaded yet. Please wait and try again.");
+            return;
+        }
+
+        try {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            const topMargin = 45;
+            const leftMargin = 20;
+            const rightMargin = 15;
+
+            const addLetterhead = () => {
+                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+            };
+
+            addLetterhead();
+
+            doc.setFontSize(18);
+            doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
+            
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Product: ${product.name}`, leftMargin, topMargin + 10);
+            doc.text(`Serial Number: ${product.serialNumber}`, leftMargin, topMargin + 15);
+            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 15, { align: 'right' });
+
+
+            const itemData = product.items.map(item => [ item.name, item.model, item.qty, `LKR ${item.avgCostLKR.toFixed(2)}`, `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}` ]);
+            
+            autoTable(doc, { 
+                startY: topMargin + 25,
+                head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
+                body: itemData,
+                theme: 'striped',
+                headStyles: { fillColor: [22, 160, 133] },
+                margin: { left: leftMargin, right: rightMargin },
+                didDrawPage: (data) => {
+                    if (data.pageNumber > 1) {
+                        addLetterhead();
+                    }
+                }
+            });
+
+            const costData = [
+                ['Raw Material Cost', `LKR ${product.costBreakdown.rawMaterialCost.toFixed(2)}`],
+                [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
+                [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
+                [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
+                [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
+                [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
+            ];
+
+            autoTable(doc, {
+                 startY: doc.autoTable.previous.finalY + 8,
+                 head: [['Cost Component', 'Amount']],
+                 body: costData,
+                 theme: 'grid',
+                 margin: { left: leftMargin, right: rightMargin },
+                 didDrawPage: (data) => {
+                    addLetterhead();
+                 }
+            });
+
+            const secondFinalY = doc.autoTable.previous.finalY;
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Total Production Cost:', leftMargin, secondFinalY + 10);
+            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 10, { align: 'right' });
+            
+            doc.text(`Profit (${product.costing.profit}%):`, leftMargin, secondFinalY + 17);
+            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 17, { align: 'right' });
+            
+            doc.setDrawColor(0);
+            doc.line(leftMargin, secondFinalY + 20, pageWidth - rightMargin, secondFinalY + 20);
+
+            doc.setFontSize(14);
+            doc.text('Final Selling Price:', leftMargin, secondFinalY + 27);
+            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 27, { align: 'right' });
+            
+            doc.save(`cost-sheet-${product.serialNumber}.pdf`);
+
+        } catch (err) {
+            console.error("PDF Export failed with error:", err);
+            setError("Could not generate PDF. Please check the console for errors.");
+        }
+    };
+    
+    // Filter products based on the search term
+    const filteredProducts = products.filter(p =>
+        p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+        p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase())
+    );
+
+    const filteredStockItems = stockItems.filter(item => 
+        item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || 
+        item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
+    );
+
+    if(loading) return <div className="p-8 text-center">Loading...</div>;
+    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    if (view === 'form') {
+        return (
+            <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? 'Edit Product' : 'Create New Product'}</h2>
+                    <div>
+                         <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
+                         <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save Product</button>
+                    </div>
+                </div>
+                <fieldset className="mb-6 p-4 border rounded-md"><legend className="font-semibold px-2">Product Details</legend>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label>Product Name</label><input type="text" name="name" value={formData.name} onChange={handleFormInputChange} className="w-full p-2 border rounded"/></div>
+                        <div><label>Serial Number</label><input type="text" value={formData.serialNumber} readOnly className="w-full p-2 border rounded bg-gray-100"/></div>
+                        <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description} onChange={handleFormInputChange} className="w-full p-2 border rounded" rows="3"></textarea></div>
+                    </div>
+                </fieldset>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Add Stock Items</legend>
+                        <input type="text" placeholder="Search stock items..." value={stockSearchTerm} onChange={(e) => setStockSearchTerm(e.target.value)} className="w-full p-2 border rounded mb-2"/>
+                        <div className="max-h-64 overflow-y-auto">
+                            {filteredStockItems.map(item => (
+                                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
+                                    <span>{item.name} <span className="text-xs text-gray-500">({item.model})</span></span>
+                                    <button onClick={() => handleAddItemToProduct(item)} className="text-sm bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">+</button>
+                                </div>
+                            ))}
+                        </div>
+                    </fieldset>
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Required Items</legend>
+                        <div className="max-h-72 overflow-y-auto">
+                        {formData.items.length === 0 ? <p className="text-gray-500 text-center py-4">No items added yet.</p> :
+                            formData.items.map(item => (
+                                <div key={item.stockItemId} className="flex items-center space-x-2 p-2 border-b">
+                                    <span className="flex-grow">{item.name} <span className="text-xs text-gray-500">(LKR {item.avgCostLKR.toFixed(2)})</span></span>
+                                    <input type="number" value={item.qty} onChange={(e) => handleItemQuantityChange(item.stockItemId, e.target.value)} className="w-20 p-1 border rounded text-center"/>
+                                    <button onClick={() => handleRemoveItemFromProduct(item.stockItemId)} className="text-red-500 hover:text-red-700">×</button>
+                                </div>
+                            ))
+                        }
+                        </div>
+                    </fieldset>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Cost Percentages (based on Raw Material Cost)</legend>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {Object.keys(formData.costing).map(key => (
+                                <div key={key}><label className="capitalize text-sm">{key.replace(/([A-Z])/g, ' $1')}</label>
+                                <div className="relative"><input type="number" name={key} value={formData.costing[key]} onChange={handleCostingChange} className="w-full p-2 border rounded pr-8"/>
+                                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span></div></div>
+                            ))}
+                        </div>
+                    </fieldset>
+                     <fieldset className="p-4 border rounded-md bg-gray-50"><legend className="font-semibold px-2">Calculated Price</legend>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-lg"><span className="font-medium">Raw Material Cost:</span><span>LKR {calculatedCosts.rawMaterialCost.toFixed(2)}</span></div>
+                            <hr/>
+                            <div className="flex justify-between text-xl font-bold mt-2"><span className="text-green-700">Final Unit Price:</span><span className="text-green-700">LKR {calculatedCosts.finalUnitPrice.toFixed(2)}</span></div>
+                        </div>
+                     </fieldset>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 sm:p-8">
+            {isCostSheetModalOpen && selectedProductForCostSheet && (
+                <Modal isOpen={isCostSheetModalOpen} onClose={() => setIsCostSheetModalOpen(false)} size="4xl">
+                    <div className="p-2">
+                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Cost Sheet: {selectedProductForCostSheet.name}</h3>
+                        <div className="mb-4">
+                            <p className="text-sm text-gray-500">Last updated by: {selectedProductForCostSheet.lastUpdatedBy?.displayName || 'N/A'} on {selectedProductForCostSheet.updatedAt?.toDate().toLocaleDateString()}</p>
+                        </div>
+                        <div className="mb-4">
+                            <h4 className="font-semibold text-lg mb-2 border-b pb-1">Required Items</h4>
+                            <ul>{selectedProductForCostSheet.items.map(item => (
+                                <li key={item.stockItemId} className="flex justify-between py-1"><span>{item.name} x {item.qty}</span> <span>LKR {(item.avgCostLKR * item.qty).toFixed(2)}</span></li>
+                            ))}</ul>
+                            <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Raw Material Total:</span><span>LKR {selectedProductForCostSheet.rawMaterialCost.toFixed(2)}</span></div>
+                        </div>
+                        <div className="mb-4">
+                             <h4 className="font-semibold text-lg mb-2 border-b pb-1">Cost Breakdown</h4>
+                             <ul>{Object.entries(selectedProductForCostSheet.costBreakdown).map(([key, value]) => key !== 'rawMaterialCost' && key !== 'totalCost' && (
+                                 <li key={key} className="flex justify-between py-1 capitalize"><span>{key.replace(/([A-Z])/g, ' $1')}</span> <span>LKR {value.toFixed(2)}</span></li>
+                             ))}</ul>
+                              <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Total Production Cost:</span><span>LKR {selectedProductForCostSheet.costBreakdown.totalCost.toFixed(2)}</span></div>
+                        </div>
+                        <div className="text-center bg-green-100 p-4 rounded-lg">
+                            <p className="text-lg font-semibold text-green-800">Final Selling Price</p>
+                            <p className="text-3xl font-bold text-green-900">LKR {selectedProductForCostSheet.finalUnitPrice.toFixed(2)}</p>
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => exportCostSheetPDF(selectedProductForCostSheet)} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Export as PDF</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Product Management</h2>
+                <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Create New Product</button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <div className="p-4 border-b">
+                    <input
+                        type="text"
+                        placeholder="Search by Product Name or Serial No..."
+                        value={productSearchTerm}
+                        onChange={(e) => setProductSearchTerm(e.target.value)}
+                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                <div className="overflow-x-auto"><table className="min-w-full">
+                    <thead><tr className="bg-gray-100">
+                        <th className="px-5 py-3 text-left">Serial No.</th>
+                        <th className="px-5 py-3 text-left">Product Name</th>
+                        <th className="px-5 py-3 text-left">Last Updated By</th>
+                        <th className="px-5 py-3 text-left">Final Price (LKR)</th>
+                        <th className="px-5 py-3 text-center">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                        {filteredProducts.map(p => (
+                            <tr key={p.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{p.serialNumber}</td>
+                                <td className="px-5 py-4 font-semibold">{p.name}</td>
+                                <td className="px-5 py-4 text-sm">
+                                    <p className="text-gray-900 whitespace-no-wrap">{p.lastUpdatedBy?.displayName || 'N/A'}</p>
+                                    <p className="text-gray-600 whitespace-no-wrap text-xs">{p.updatedAt?.toDate().toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-5 py-4 font-semibold text-green-700">{p.finalUnitPrice.toFixed(2)}</td>
+                                <td className="px-5 py-4 text-center">
+                                    <div className="flex justify-center space-x-2">
+                                        {['super_admin', 'admin'].includes(currentUser.role) && <button onClick={() => openCostSheet(p)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>}
+                                        <button onClick={() => handleEdit(p)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                        {currentUser.role === 'super_admin' && <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table></div>
+            </div>
+        </div>
+    );
+};
+
+
+const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
+const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
+
+// --- NEW, FUNCTIONAL SUPPLIER MANAGEMENT COMPONENT ---
+const SupplierManagement = () => {
+    const [suppliers, setSuppliers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [formData, setFormData] = useState({});
+
+    const fetchSuppliers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const querySnapshot = await getDocs(collection(db, 'suppliers'));
+            const suppliersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSuppliers(suppliersList);
+        } catch (err) {
+            setError('Failed to fetch suppliers.');
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchSuppliers();
+    }, [fetchSuppliers]);
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (isEditing) {
+                const docRef = doc(db, 'suppliers', formData.id);
+                await updateDoc(docRef, { ...formData, updatedAt: Timestamp.now() });
+            } else {
+                await addDoc(collection(db, 'suppliers'), { ...formData, createdAt: Timestamp.now() });
+            }
+            fetchSuppliers();
+            setIsModalOpen(false);
+        } catch (err) {
+            setError('Failed to save supplier data.');
+            console.error(err);
+        }
+    };
+
+    const openAddModal = () => {
+        setIsEditing(false);
+        setFormData({
+            companyName: '',
+            contactPerson: '',
+            email: '',
+            telephone: '',
+            address: '',
+            productsSupplied: ''
+        });
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (supplier) => {
+        setIsEditing(true);
+        setFormData(supplier);
+        setIsModalOpen(true);
+    };
+
+    const handleDelete = async (supplierId) => {
+        if (window.confirm('Are you sure you want to delete this supplier?')) {
+            try {
+                await deleteDoc(doc(db, 'suppliers', supplierId));
+                fetchSuppliers();
+            } catch (err) {
+                setError('Failed to delete supplier.');
+                console.error(err);
+            }
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Suppliers...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Supplier' : 'Add New Supplier'}</h3>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium">Company Name</label><input type="text" name="companyName" required value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Contact Person</label><input type="text" name="contactPerson" value={formData.contactPerson || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm font-medium">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                        <div><label className="block text-sm font-medium">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    </div>
+                    <div><label className="block text-sm font-medium">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
+                    <div><label className="block text-sm font-medium">Products/Services Supplied</label><textarea name="productsSupplied" value={formData.productsSupplied || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                    <div className="flex justify-end pt-4">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="mr-3 px-4 py-2 bg-gray-200 rounded-md">Cancel</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Add Supplier'}</button>
+                    </div>
+                </form>
+            </Modal>
+
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Supplier Management</h2>
+                <button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <PlusCircleIcon/> Add Supplier
+                </button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead><tr className="bg-gray-100">
+                        <th className="px-5 py-3 text-left">Company</th>
+                        <th className="px-5 py-3 text-left">Contact Info</th>
+                        <th className="px-5 py-3 text-left">Address</th>
+                        <th className="px-5 py-3 text-center">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                        {suppliers.map(supplier => (
+                            <tr key={supplier.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4">
+                                    <p className="font-semibold">{supplier.companyName}</p>
+                                    <p className="text-sm text-gray-600">{supplier.contactPerson}</p>
+                                </td>
+                                <td className="px-5 py-4 text-sm">
+                                    <p>{supplier.email}</p>
+                                    <p>{supplier.telephone}</p>
+                                </td>
+                                <td className="px-5 py-4 text-sm">{supplier.address}</td>
+                                <td className="px-5 py-4 text-center">
+                                    <div className="flex justify-center space-x-3">
+                                        <button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                        <button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+// ====================================================================================
+// --- NEW WEBSITE MANAGEMENT COMPONENT ---
 // ====================================================================================
 const WebsiteManagementPortal = ({ currentUser }) => {
     const [content, setContent] = useState(null);
@@ -1372,15 +1983,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const [currentCategory, setCurrentCategory] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
 
-    const defaultHomepageContent = {
-        mapEmbedURL: "",
-        whyChooseTitle: "Why Choose IRN Solar House?",
-        whyChooseSubtitle: "We are committed to providing top-tier solar technology...",
-        contactHotline: "+94 77 123 4567",
-        contactEmail: "info@irnsolar.com",
-        contactAddress: "123 Main Street, Negombo, Sri Lanka",
-    };
-
     // Fetch all website-related content
     useEffect(() => {
         const fetchAllData = async () => {
@@ -1389,25 +1991,27 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                 // Fetch homepage general content
                 const contentDocRef = doc(db, 'website_content', 'homepage');
                 const contentSnap = await getDoc(contentDocRef);
-                setContent(contentSnap.exists() ? { ...defaultHomepageContent, ...contentSnap.data() } : defaultHomepageContent);
+                if (contentSnap.exists()) {
+                    setContent(contentSnap.data());
+                } else {
+                    setContent({ mapEmbedURL: '' }); // Default
+                }
 
-                // Fetch product categories and listen for real-time updates
+                // Fetch product categories
                 const categoriesQuery = query(collection(db, 'product_categories'));
-                const categoriesUnsubscribe = onSnapshot(categoriesQuery, (querySnapshot) => {
-                    const categoriesData = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                    setCategories(categoriesData);
+                const categoriesSnapshot = await getDocs(categoriesQuery);
+                const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setCategories(categoriesData);
 
-                    // For each category, listen for its models
-                    categoriesData.forEach(category => {
-                        const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
-                        onSnapshot(modelsQuery, (modelsSnapshot) => {
-                            const modelsForCategory = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                            setModels(prevModels => ({ ...prevModels, [category.id]: modelsForCategory }));
-                        });
-                    });
-                });
+                // Fetch models for each category
+                const modelsData = {};
+                for (const category of categoriesData) {
+                    const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
+                    const modelsSnapshot = await getDocs(modelsQuery);
+                    modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                setModels(modelsData);
 
-                return () => categoriesUnsubscribe();
             } catch (err) {
                 console.error("Error fetching website content:", err);
                 setError("Failed to load website content.");
@@ -1415,8 +2019,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                 setLoading(false);
             }
         };
-        const unsubscribe = fetchAllData();
-        return () => { unsubscribe.then(u => u && u()); };
+        fetchAllData();
     }, []);
     
     const handleContentInputChange = (e) => {
@@ -1429,10 +2032,10 @@ const WebsiteManagementPortal = ({ currentUser }) => {
         try {
             const contentDocRef = doc(db, 'website_content', 'homepage');
             await setDoc(contentDocRef, content, { merge: true });
-            setSuccess("Homepage content saved!");
+            setSuccess("General content saved!");
             setTimeout(() => setSuccess(''), 3000);
         } catch(err) {
-            setError("Failed to save homepage content.");
+            setError("Failed to save general content.");
         } finally {
             setSaving(false);
         }
@@ -1477,6 +2080,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
         };
 
         try {
+            // Handle image upload if a new file is present
             if (currentModel.imageFile) {
                 const filePath = `public_products/${currentCategory.id}/${Date.now()}_${currentModel.imageFile.name}`;
                 const storageRef = ref(storage, filePath);
@@ -1487,12 +2091,13 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                         (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
                         (error) => reject(error),
                         async () => {
-                            if (currentModel.id && currentModel.imagePath) {
-                                try { await deleteObject(ref(storage, currentModel.imagePath)); } catch (e) { console.warn("Old image not found, skipping delete.")}
-                            }
                             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                             modelData.imageUrl = downloadURL;
                             modelData.imagePath = filePath;
+                             // If it's an edit and there was an old image, delete it
+                            if (currentModel.id && currentModel.imagePath) {
+                                await deleteObject(ref(storage, currentModel.imagePath));
+                            }
                             resolve();
                         }
                     );
@@ -1500,12 +2105,15 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             }
 
             const collectionRef = collection(db, 'product_categories', currentCategory.id, 'models');
-            if (currentModel.id) {
-                await updateDoc(doc(collectionRef, currentModel.id), modelData);
-            } else {
+            if (currentModel.id) { // Editing existing model
+                const docRef = doc(collectionRef, currentModel.id);
+                await updateDoc(docRef, modelData);
+            } else { // Adding new model
                 modelData.createdAt = Timestamp.now();
                 await addDoc(collectionRef, modelData);
             }
+            // Simple refresh
+            window.location.reload();
         } catch (err) {
             console.error("Failed to save model", err);
             setError("Failed to save model. Check console for details.");
@@ -1519,10 +2127,14 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const handleDeleteModel = async (category, model) => {
         if (window.confirm(`Are you sure you want to delete the model "${model.name}"? This action cannot be undone.`)) {
              try {
+                // Delete the image from storage first
                 if (model.imagePath) {
                     await deleteObject(ref(storage, model.imagePath));
                 }
+                // Delete the document from Firestore
                 await deleteDoc(doc(db, 'product_categories', category.id, 'models', model.id));
+                // Simple refresh
+                window.location.reload();
              } catch (err) {
                 console.error("Failed to delete model", err);
                 setError("Failed to delete model.");
@@ -1553,29 +2165,14 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Homepage Sections</h3>
-                <div className="space-y-6">
-                    <fieldset className="p-4 border rounded-md">
-                        <legend className="font-semibold px-2 text-base">"Why Choose Us" & Contact Info</legend>
-                        <div className="space-y-4">
-                            <div><label className="block text-sm font-medium text-gray-700">Section Title</label><input type="text" name="whyChooseTitle" value={content?.whyChooseTitle || ''} onChange={handleContentInputChange} className="mt-1 block w-full p-2 border rounded-md shadow-sm"/></div>
-                            <div><label className="block text-sm font-medium text-gray-700">Section Subtitle</label><textarea name="whyChooseSubtitle" value={content?.whyChooseSubtitle || ''} onChange={handleContentInputChange} className="mt-1 block w-full p-2 border rounded-md shadow-sm" rows="2"></textarea></div>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                                <div><label className="block text-sm font-medium text-gray-700">Hotline</label><input type="text" name="contactHotline" value={content?.contactHotline || ''} onChange={handleContentInputChange} className="mt-1 block w-full p-2 border rounded-md shadow-sm"/></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="contactEmail" value={content?.contactEmail || ''} onChange={handleContentInputChange} className="mt-1 block w-full p-2 border rounded-md shadow-sm"/></div>
-                                <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">Address</label><input type="text" name="contactAddress" value={content?.contactAddress || ''} onChange={handleContentInputChange} className="mt-1 block w-full p-2 border rounded-md shadow-sm"/></div>
-                            </div>
-                        </div>
-                    </fieldset>
-                    <fieldset className="p-4 border rounded-md">
-                        <legend className="font-semibold px-2 text-base">Showroom Map</legend>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Google Maps Embed URL</label>
-                          <input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Paste the src URL from the Google Maps embed code"/>
-                        </div>
-                    </fieldset>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">General Settings</h3>
+                <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Google Maps Embed URL</label>
+                      <input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Paste the src URL from the Google Maps embed code"/>
+                    </div>
                     <div className="flex justify-end">
-                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save Homepage Sections'}</button>
+                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save General Settings'}</button>
                     </div>
                 </div>
             </div>
@@ -1611,7 +2208,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
         </div>
     );
 };
-
 
 // --- NEW Product Category Page Component ---
 const ProductCategoryPage = ({ categoryId, onBack }) => {
