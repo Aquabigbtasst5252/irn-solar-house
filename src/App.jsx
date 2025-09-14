@@ -1967,7 +1967,7 @@ const SupplierManagement = () => {
 };
 
 // ====================================================================================
-// --- WEBSITE MANAGEMENT COMPONENT (FINAL CORRECTED VERSION) ---
+// --- WEBSITE MANAGEMENT COMPONENT (FINAL, COMPLETE, AND CORRECTED VERSION) ---
 // ====================================================================================
 const WebsiteManagementPortal = ({ currentUser }) => {
     // State for data
@@ -1995,18 +1995,15 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
-            // Fetch homepage general content
             const contentDocRef = doc(db, 'website_content', 'homepage');
             const contentSnap = await getDoc(contentDocRef);
             setContent(contentSnap.exists() ? contentSnap.data() : {});
 
-            // Fetch product categories
             const categoriesQuery = query(collection(db, 'product_categories'), orderBy("name", "asc"));
             const categoriesSnapshot = await getDocs(categoriesQuery);
             const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setCategories(categoriesData);
 
-            // Fetch models for each category
             const modelsData = {};
             for (const category of categoriesData) {
                 const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
@@ -2014,7 +2011,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                 modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             }
             setModels(modelsData);
-
         } catch (err) {
             console.error("Error fetching website content:", err);
             setError("Failed to load website content.");
@@ -2076,7 +2072,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             delete categoryData.imageFile;
             const docId = categoryData.id;
             delete categoryData.id;
-
             if (docId) {
                 await updateDoc(doc(db, 'product_categories', docId), categoryData);
             } else {
@@ -2191,7 +2186,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                 </form>
             </Modal>
             <Modal isOpen={isModelModalOpen} onClose={() => setIsModelModalOpen(false)} size="2xl">
-                 <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Product for {currentCategoryForModel?.name}</h3>
+                <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Product for {currentCategoryForModel?.name}</h3>
                 <form onSubmit={handleModelSubmit} className="space-y-4">
                     <div><label className="block text-sm font-medium">Product Name</label><input type="text" name="name" required value={currentModel?.name || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                     <div><label className="block text-sm font-medium">Description</label><textarea name="description" required value={currentModel?.description || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
