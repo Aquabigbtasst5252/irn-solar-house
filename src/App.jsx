@@ -23,7 +23,8 @@ import {
   writeBatch,
   query,
   orderBy,
-  where
+  where,
+  onSnapshot
 } from 'firebase/firestore';
 import {
     getStorage,
@@ -46,28 +47,6 @@ try {
   db = getFirestore(firebaseApp);
   storage = getStorage(firebaseApp);
 } catch (error) { console.error("Error initializing Firebase:", error); }
-
-// --- Routing Hook & Parser ---
-const useHash = () => {
-    const [hash, setHash] = useState(window.location.hash);
-    const onHashChange = useCallback(() => setHash(window.location.hash), []);
-    useEffect(() => {
-        window.addEventListener('hashchange', onHashChange);
-        return () => window.removeEventListener('hashchange', onHashChange);
-    }, [onHashChange]);
-    return hash;
-};
-
-const parseRoute = (hash) => {
-    const path = hash.substring(1) || '/';
-    const parts = path.split('/').filter(p => p);
-    if (parts[0] === 'signin') return { view: 'signin' };
-    if (parts[0] === 'forgot-password') return { view: 'forgot-password' };
-    if (parts[0] === 'products' && parts[1]) return { view: 'product-category', categoryId: parts[1] };
-    if (parts[0] === 'product-detail' && parts[1]) return { view: 'product-detail', productId: parts[1] };
-    return { view: 'homepage' };
-};
-
 
 // --- Helper Functions & Data ---
 const getUserProfile = async (uid) => {
@@ -108,6 +87,7 @@ const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
       </div>
     );
 };
+
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
@@ -1989,136 +1969,291 @@ const SupplierManagement = () => {
 // ====================================================================================
 // --- NEW WEBSITE MANAGEMENT COMPONENT ---
 // ====================================================================================
-const WebsiteManagementPortal = () => {
+const WebsiteManagementPortal = ({ currentUser }) => {
     const [content, setContent] = useState(null);
+    const [categories, setCategories] = useState([]);
+    const [models, setModels] = useState({}); // { categoryId: [models] }
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
-    const contentDocRef = useMemo(() => doc(db, 'website_content', 'homepage'), []);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentModel, setCurrentModel] = useState(null);
+    const [currentCategory, setCurrentCategory] = useState(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
-    const fetchContent = useCallback(async () => {
-        setLoading(true);
-        try {
-            const docSnap = await getDoc(contentDocRef);
-            if (docSnap.exists()) {
-                setContent(docSnap.data());
-            } else {
-                // Initialize with default structure if it doesn't exist
-                const defaultContent = {
-                    whyChooseTitle: "Why Choose IRN Solar House?",
-                    whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
-                    feature1Title: "Electricity Saving",
-                    feature1Text: "Reduce your electricity bills and carbon footprint. Make a smart investment for your wallet and the planet.",
-                    feature2Title: "Premium Quality Products",
-                    feature2Text: "We import and supply only best-in-class solar panels, inverters, and batteries from trusted international manufacturers.",
-                    feature3Title: "Expert Installation",
-                    feature3Text: "Our certified technicians ensure a seamless and safe installation process, tailored to your property's specific needs.",
-                    contactHotline: "+94 77 750 1836",
-                    contactEmail: "easytime1@gmail.com",
-                    contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
-                };
-                setContent(defaultContent);
-            }
-        } catch (err) {
-            console.error("Error fetching website content:", err);
-            setError("Failed to load website content.");
-        } finally {
-            setLoading(false);
-        }
-    }, [contentDocRef]);
-
+    // Fetch all website-related content
     useEffect(() => {
-        fetchContent();
-    }, [fetchContent]);
+        const fetchAllData = async () => {
+            setLoading(true);
+            try {
+                // Fetch homepage general content
+                const contentDocRef = doc(db, 'website_content', 'homepage');
+                const contentSnap = await getDoc(contentDocRef);
+                if (contentSnap.exists()) {
+                    setContent(contentSnap.data());
+                } else {
+                    setContent({ mapEmbedURL: '' }); // Default
+                }
 
-    const handleInputChange = (e, featureIndex) => {
+                // Fetch product categories
+                const categoriesQuery = query(collection(db, 'product_categories'));
+                const categoriesSnapshot = await getDocs(categoriesQuery);
+                const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setCategories(categoriesData);
+
+                // Fetch models for each category
+                const modelsData = {};
+                for (const category of categoriesData) {
+                    const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
+                    const modelsSnapshot = await getDocs(modelsQuery);
+                    modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                setModels(modelsData);
+
+            } catch (err) {
+                console.error("Error fetching website content:", err);
+                setError("Failed to load website content.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchAllData();
+    }, []);
+    
+    const handleContentInputChange = (e) => {
         const { name, value } = e.target;
         setContent(prev => ({...prev, [name]: value}));
     };
-
-    const handleSave = async () => {
+    
+    const handleSaveGeneralContent = async () => {
         setSaving(true);
-        setError('');
-        setSuccess('');
         try {
+            const contentDocRef = doc(db, 'website_content', 'homepage');
             await setDoc(contentDocRef, content, { merge: true });
-            setSuccess("Website content updated successfully!");
-            setTimeout(() => setSuccess(''), 3000); // Clear message after 3s
-        } catch (err) {
-            console.error("Error saving website content:", err);
-            setError("Failed to save content. Please check permissions and try again.");
+            setSuccess("General content saved!");
+            setTimeout(() => setSuccess(''), 3000);
+        } catch(err) {
+            setError("Failed to save general content.");
         } finally {
             setSaving(false);
         }
     };
+    
+    // --- Model Management Functions ---
+    const openAddModelModal = (category) => {
+        setCurrentCategory(category);
+        setCurrentModel({ name: '', description: '', price: 0, imageUrl: '', imagePath: '' });
+        setIsModalOpen(true);
+    };
+
+    const openEditModelModal = (category, model) => {
+        setCurrentCategory(category);
+        setCurrentModel(model);
+        setIsModalOpen(true);
+    };
+    
+    const handleModelInputChange = (e) => {
+        const { name, value } = e.target;
+        setCurrentModel(prev => ({...prev, [name]: value}));
+    };
+
+    const handleModelFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setCurrentModel(prev => ({...prev, imageFile: file}));
+        }
+    };
+    
+    const handleModelSubmit = async (e) => {
+        e.preventDefault();
+        if (!currentCategory || !currentModel) return;
+        setSaving(true);
+        
+        const modelData = {
+            name: currentModel.name,
+            description: currentModel.description,
+            price: Number(currentModel.price),
+            imageUrl: currentModel.imageUrl,
+            imagePath: currentModel.imagePath,
+        };
+
+        try {
+            // Handle image upload if a new file is present
+            if (currentModel.imageFile) {
+                const filePath = `public_products/${currentCategory.id}/${Date.now()}_${currentModel.imageFile.name}`;
+                const storageRef = ref(storage, filePath);
+                const uploadTask = uploadBytesResumable(storageRef, currentModel.imageFile);
+                
+                await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed',
+                        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+                        (error) => reject(error),
+                        async () => {
+                            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                            modelData.imageUrl = downloadURL;
+                            modelData.imagePath = filePath;
+                             // If it's an edit and there was an old image, delete it
+                            if (currentModel.id && currentModel.imagePath) {
+                                await deleteObject(ref(storage, currentModel.imagePath));
+                            }
+                            resolve();
+                        }
+                    );
+                });
+            }
+
+            const collectionRef = collection(db, 'product_categories', currentCategory.id, 'models');
+            if (currentModel.id) { // Editing existing model
+                const docRef = doc(collectionRef, currentModel.id);
+                await updateDoc(docRef, modelData);
+            } else { // Adding new model
+                modelData.createdAt = Timestamp.now();
+                await addDoc(collectionRef, modelData);
+            }
+            // Simple refresh
+            window.location.reload();
+        } catch (err) {
+            console.error("Failed to save model", err);
+            setError("Failed to save model. Check console for details.");
+        } finally {
+            setSaving(false);
+            setUploadProgress(0);
+            setIsModalOpen(false);
+        }
+    };
+    
+    const handleDeleteModel = async (category, model) => {
+        if (window.confirm(`Are you sure you want to delete the model "${model.name}"? This action cannot be undone.`)) {
+             try {
+                // Delete the image from storage first
+                if (model.imagePath) {
+                    await deleteObject(ref(storage, model.imagePath));
+                }
+                // Delete the document from Firestore
+                await deleteDoc(doc(db, 'product_categories', category.id, 'models', model.id));
+                // Simple refresh
+                window.location.reload();
+             } catch (err) {
+                console.error("Failed to delete model", err);
+                setError("Failed to delete model.");
+             }
+        }
+    };
+
 
     if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
     if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-    if (!content) return <div className="p-8 text-center">No content found. Could not initialize.</div>;
 
     return (
-        <div className="p-4 sm:p-8">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Website Homepage Management</h2>
-                <button onClick={handleSave} disabled={saving} className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">
-                    {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-            </div>
-            {success && <div className="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
+        <div className="p-4 sm:p-8 space-y-8">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Model for {currentCategory?.name}</h3>
+                <form onSubmit={handleModelSubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium">Model Name</label><input type="text" name="name" required value={currentModel?.name || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Description</label><textarea name="description" required value={currentModel?.description || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
+                    <div><label className="block text-sm font-medium">Price (LKR)</label><input type="number" name="price" required value={currentModel?.price || 0} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Product Image</label><input type="file" name="imageFile" onChange={handleModelFileChange} className="mt-1 w-full text-sm"/></div>
+                    {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${uploadProgress}%`}}></div></div>}
+                    {currentModel?.imageUrl && !currentModel?.imageFile && <img src={currentModel.imageUrl} alt="Current" className="w-32 h-32 object-cover rounded-md mt-2"/>}
+                    <div className="flex justify-end pt-4"><button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save Model'}</button></div>
+                </form>
+            </Modal>
+            
+            <div className="flex justify-between items-center"><h2 className="text-3xl font-bold text-gray-800">Website Content Management</h2></div>
+            {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
 
-            <div className="bg-white p-6 rounded-xl shadow-lg space-y-8">
-                <fieldset className="p-4 border rounded-md">
-                    <legend className="font-semibold px-2 text-lg">"Why Choose Us" Section</legend>
-                    <div className="space-y-4">
-                        <div><label className="block text-sm font-medium text-gray-700">Section Title</label><input type="text" name="whyChooseTitle" value={content.whyChooseTitle} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                        <div><label className="block text-sm font-medium text-gray-700">Section Subtitle</label><textarea name="whyChooseSubtitle" value={content.whyChooseSubtitle} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="2"></textarea></div>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">General Settings</h3>
+                <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Google Maps Embed URL</label>
+                      <input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" placeholder="Paste the src URL from the Google Maps embed code"/>
                     </div>
-                </fieldset>
-
-                <fieldset className="p-4 border rounded-md">
-                    <legend className="font-semibold px-2 text-lg">Features</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                            <h4 className="font-bold">Feature 1</h4>
-                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature1Title" value={content.feature1Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature1Text" value={content.feature1Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
-                        </div>
-                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                            <h4 className="font-bold">Feature 2</h4>
-                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature2Title" value={content.feature2Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature2Text" value={content.feature2Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
-                        </div>
-                        <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-                            <h4 className="font-bold">Feature 3</h4>
-                            <div><label className="block text-sm font-medium text-gray-700">Title</label><input type="text" name="feature3Title" value={content.feature3Title} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                            <div><label className="block text-sm font-medium text-gray-700">Text</label><textarea name="feature3Text" value={content.feature3Text} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2" rows="3"></textarea></div>
-                        </div>
+                    <div className="flex justify-end">
+                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save General Settings'}</button>
                     </div>
-                </fieldset>
-                
-                <fieldset className="p-4 border rounded-md">
-                    <legend className="font-semibold px-2 text-lg">Contact Information</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <div><label className="block text-sm font-medium text-gray-700">Hotline</label><input type="text" name="contactHotline" value={content.contactHotline} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                         <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="contactEmail" value={content.contactEmail} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">Address</label><input type="text" name="contactAddress" value={content.contactAddress} onChange={handleInputChange} className="mt-1 block w-full border-gray-300 rounded-md shadow-sm p-2"/></div>
-                    </div>
-                </fieldset>
+                </div>
             </div>
+            
+            {categories.map(category => (
+                <div key={category.id} className="bg-white p-6 rounded-xl shadow-lg">
+                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 className="text-xl font-bold text-gray-800">Manage: {category.name}</h3>
+                        <button onClick={() => openAddModelModal(category)} className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-700"><PlusCircleIcon className="w-5 h-5 mr-1"/> Add Model</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead><tr className="bg-gray-50"><th className="px-4 py-2 text-left">Image</th><th className="px-4 py-2 text-left">Name</th><th className="px-4 py-2 text-left">Price (LKR)</th><th className="px-4 py-2 text-center">Actions</th></tr></thead>
+                            <tbody>
+                                {models[category.id]?.length > 0 ? models[category.id].map(model => (
+                                    <tr key={model.id} className="border-t">
+                                        <td className="px-4 py-2"><img src={model.imageUrl} alt={model.name} className="w-16 h-16 object-cover rounded"/></td>
+                                        <td className="px-4 py-2 font-semibold">{model.name}</td>
+                                        <td className="px-4 py-2">{model.price.toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-center">
+                                            <div className="flex justify-center space-x-2">
+                                                <button onClick={() => openEditModelModal(category, model)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                                <button onClick={() => handleDeleteModel(category, model)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : <tr><td colSpan="4" className="text-center py-4 text-gray-500">No models added for this category yet.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };
 
+// --- NEW Product Category Page Component ---
+const ProductCategoryPage = ({ categoryId, onBack }) => {
+    const [category, setCategory] = useState(null);
+    const [models, setModels] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-// --- NEW Product Detail Page Component ---
-const ProductDetailPage = ({ product, onBack }) => {
-    if (!product) return null;
+    useEffect(() => {
+        if (!categoryId) return;
+        
+        const fetchCategoryData = async () => {
+            setLoading(true);
+            try {
+                // Fetch category details
+                const categoryDocRef = doc(db, 'product_categories', categoryId);
+                const categorySnap = await getDoc(categoryDocRef);
+                if (categorySnap.exists()) {
+                    setCategory(categorySnap.data());
+                }
 
+                // Fetch models in the category
+                const modelsQuery = query(collection(db, 'product_categories', categoryId, 'models'), orderBy('createdAt', 'desc'));
+                const modelsSnap = await getDocs(modelsQuery);
+                setModels(modelsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            } catch (error) {
+                console.error("Error fetching category data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCategoryData();
+    }, [categoryId]);
+
+    if (loading) {
+        return <div className="min-h-screen flex items-center justify-center">Loading Products...</div>;
+    }
+
+    if (!category) {
+        return <div className="min-h-screen flex items-center justify-center">Category not found.</div>;
+    }
+    
     return (
         <div className="bg-gray-50 min-h-screen font-sans">
-            <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
+             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
                 <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
                     <div className="flex items-center">
                          <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-10 sm:h-12 w-auto"/>
@@ -2132,56 +2267,39 @@ const ProductDetailPage = ({ product, onBack }) => {
                     </button>
                 </nav>
             </header>
-            
-            <main className="container mx-auto px-4 sm:px-6 py-12">
-                <div className="bg-white p-6 sm:p-10 rounded-2xl shadow-xl">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12">
-                        <div>
-                            <img src={product.imageUrl} alt={product.name} className="w-full h-auto object-cover rounded-xl shadow-lg" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">{product.name}</h1>
-                            <p className="text-gray-600 text-lg mb-6">{product.description}</p>
-                            
-                            {product.keyFeatures && (
-                                <div className="mb-6">
-                                    <h3 className="text-xl font-semibold text-gray-800 mb-3">Key Features</h3>
-                                    <ul className="space-y-2 list-disc list-inside text-gray-700">
-                                        {product.keyFeatures.map((feature, index) => (
-                                            <li key={index}>{feature}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
 
-                            {product.specifications && (
-                                <div>
-                                    <h3 className="text-xl font-semibold text-gray-800 mb-3">Technical Specifications</h3>
-                                    <div className="border rounded-lg overflow-hidden">
-                                        <table className="min-w-full">
-                                            <tbody className="divide-y">
-                                            {Object.entries(product.specifications).map(([key, value]) => (
-                                                <tr key={key} className="bg-white hover:bg-gray-50">
-                                                    <td className="px-4 py-3 font-medium text-gray-600 w-1/3">{key}</td>
-                                                    <td className="px-4 py-3 text-gray-800">{value}</td>
-                                                </tr>
-                                            ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+            <main className="container mx-auto px-4 sm:px-6 py-12">
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">{category.name}</h1>
+                    <p className="text-lg text-gray-600 max-w-3xl mx-auto">{category.description}</p>
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {models.map(model => (
+                        <div key={model.id} className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col">
+                           <img src={model.imageUrl} alt={model.name} className="w-full h-56 object-cover"/>
+                           <div className="p-6 flex flex-col flex-grow">
+                              <h2 className="text-2xl font-bold text-gray-800 mb-2">{model.name}</h2>
+                              <p className="text-gray-600 mb-4 flex-grow">{model.description}</p>
+                              <p className="text-3xl font-bold text-green-600 mt-auto">LKR {model.price.toLocaleString()}</p>
+                           </div>
+                        </div>
+                    ))}
+                </div>
+                {models.length === 0 && (
+                    <div className="text-center py-16">
+                        <h2 className="text-2xl font-semibold text-gray-700">No Models Available</h2>
+                        <p className="text-gray-500 mt-2">Please check back later for available products in this category.</p>
+                    </div>
+                )}
             </main>
-            
             <footer className="bg-gray-900 text-white py-6 mt-12"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
         </div>
     );
 };
 
-const HomePage = ({ onSignInClick, onProductSelect, content }) => {
+
+const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
     const defaultContent = {
         whyChooseTitle: "Why Choose IRN Solar House?",
         whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
@@ -2194,42 +2312,11 @@ const HomePage = ({ onSignInClick, onProductSelect, content }) => {
         contactHotline: "+94 77 750 1836",
         contactEmail: "easytime1@gmail.com",
         contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
+        mapEmbedURL: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.183785244585!2d79.9897009758782!3d7.104445816301121!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae2e5362d2944c3%3A0x6a7a58a221a221e5!2sIRN%20SOLAR%20HOUSE!5e0!3m2!1sen!2slk!4v1726138095493!5m2!1sen!2slk"
     };
 
     const pageContent = content || defaultContent;
-
-    const coreProducts = [
-        {
-            id: 'swp-01',
-            name: 'Solar Water Pump',
-            imageUrl: 'https://i.imgur.com/zpkAcbW.jpeg',
-            description: 'Efficient and reliable water pumping solutions powered entirely by solar energy. Perfect for agriculture and off-grid water access.',
-            keyFeatures: [
-                'Runs entirely on solar power, no electricity bills',
-                'High-efficiency brushless DC motor for long life',
-                'Durable stainless steel construction',
-                'Automatic operation with water level sensors',
-                'Easy to install and maintain with minimal costs'
-            ],
-            specifications: {
-                'Max Flow Rate': '1,500 Liters/Hour',
-                'Max Head (Lift)': '30 Meters',
-                'Motor Voltage': '24V DC',
-                'Pump Outlet': '1 inch',
-                'Required Solar Panel': '250W (sold separately)'
-            }
-        },
-        {
-            id: 'sac-01',
-            name: 'Solar Air Conditioner',
-            imageUrl: 'https://i.imgur.com/2XclxRL.jpeg',
-            description: 'Stay cool and reduce your electricity bills. Our solar AC units provide sustainable cooling for homes and offices.'
-        }
-    ];
-
-    const googleMapsEmbedCode = `
-        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.183785244585!2d79.9897009758782!3d7.104445816301121!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae2e5362d2944c3%3A0x6a7a58a221a221e5!2sIRN%20SOLAR%20HOUSE!5e0!3m2!1sen!2slk!4v1726138095493!5m2!1sen!2slk" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-    `;
+    const googleMapsEmbedCode = `<iframe src="${pageContent.mapEmbedURL}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
     return (
         <div className="bg-white text-gray-800 font-sans">
@@ -2267,7 +2354,6 @@ const HomePage = ({ onSignInClick, onProductSelect, content }) => {
                     Your browser does not support the video tag.
                 </video>
                 <div className="absolute z-10 w-full h-full bg-black bg-opacity-40"></div>
-                {/* Text Overlay Removed as requested */}
             </section>
             
             {/* About Section */}
@@ -2290,12 +2376,12 @@ const HomePage = ({ onSignInClick, onProductSelect, content }) => {
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                         {coreProducts.map(product => (
-                            <div key={product.id} onClick={() => onProductSelect(product)} className="cursor-pointer rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
-                                <img src={product.imageUrl} alt={product.name} className="w-full h-64 object-cover"/>
+                         {categories.map(category => (
+                            <div key={category.id} onClick={() => onProductSelect(category.id)} className="cursor-pointer rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                                <img src={category.imageUrl} alt={category.name} className="w-full h-64 object-cover"/>
                                 <div className="p-6 bg-white">
-                                    <h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">{product.name}</h3>
-                                    <p className="text-gray-700">{product.description}</p>
+                                    <h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">{category.name}</h3>
+                                    <p className="text-gray-700">{category.description}</p>
                                 </div>
                             </div>
                          ))}
@@ -2384,7 +2470,7 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
-            case 'website_management': return <WebsiteManagementPortal />;
+            case 'website_management': return <WebsiteManagementPortal currentUser={user} />;
             default: return (<div>Welcome!</div>);
         }
     };
@@ -2438,23 +2524,31 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('homepage');
   const [loading, setLoading] = useState(true);
-  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [homepageContent, setHomepageContent] = useState(null);
+  const [productCategories, setProductCategories] = useState([]);
 
+  // Fetch all public data
   useEffect(() => {
-    // Fetch website content for the public homepage
-    const fetchWebsiteContent = async () => {
+    const fetchPublicData = async () => {
         try {
+            // Fetch homepage text content and map URL
             const contentDocRef = doc(db, 'website_content', 'homepage');
-            const docSnap = await getDoc(contentDocRef);
-            if (docSnap.exists()) {
-                setHomepageContent(docSnap.data());
+            const contentSnap = await getDoc(contentDocRef);
+            if (contentSnap.exists()) {
+                setHomepageContent(contentSnap.data());
             }
+
+            // Fetch product categories for homepage
+            const categoriesQuery = query(collection(db, 'product_categories'));
+            const categoriesSnap = await getDocs(categoriesQuery);
+            setProductCategories(categoriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
         } catch (error) {
-            console.error("Could not fetch homepage content:", error);
+            console.error("Could not fetch public website data:", error);
         }
     };
-    fetchWebsiteContent();
+    fetchPublicData();
   }, []);
 
   useEffect(() => {
@@ -2475,9 +2569,9 @@ export default function App() {
   const handleSignOut = async () => { try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); } };
   const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
 
-  const handleProductSelect = (product) => {
-      setSelectedProduct(product);
-      setView('product-detail');
+  const handleProductSelect = (categoryId) => {
+      setSelectedCategoryId(categoryId);
+      setView('product-category');
       window.scrollTo(0, 0);
   };
 
@@ -2490,11 +2584,11 @@ export default function App() {
             return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><SignIn setView={setView} onLoginSuccess={handleLoginSuccess} /></div>;
           case 'forgot-password': 
             return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><ForgotPassword setView={setView} /></div>;
-          case 'product-detail':
-            return <ProductDetailPage product={selectedProduct} onBack={() => { setView('homepage'); setSelectedProduct(null); }} />;
+          case 'product-category':
+            return <ProductCategoryPage categoryId={selectedCategoryId} onBack={() => { setView('homepage'); setSelectedCategoryId(null); }} />;
           case 'homepage': 
           default: 
-            return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} content={homepageContent} />;
+            return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} content={homepageContent} categories={productCategories} />;
       }
   };
 
