@@ -2455,11 +2455,12 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            <section id="location" className="py-16 sm:py-24 bg-white">
+             <section id="location" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
-                    <div className="rounded-xl shadow-lg overflow-hidden" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
                 </div>
+                {/* This div is now outside the centered container, allowing it to be full-width */}
+                <div className="w-full" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
             </section>
 
             <section id="contact" className="py-20 bg-gray-800 text-white">
