@@ -1900,6 +1900,22 @@ const ImportDashboard = () => {
     );
 };
 
+const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
+    // This is a placeholder for the real component logic.
+    // You will build out the forms and state management here.
+    return (
+        <div className="p-4 sm:p-8">
+            <h2 className="text-3xl font-bold text-gray-800">Create Quotation / Invoice</h2>
+            <div className="mt-6 bg-white p-8 rounded-xl shadow-lg">
+                <p className="text-gray-600">This section is under construction. The form to add customers, select products, and generate quotations and invoices will be built here.</p>
+                <button onClick={() => onNavigate('invoices')} className="mt-4 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">
+                    View All Invoices
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const QuotationManagement = ({ currentUser, onNavigate }) => { 
     // This is the main component for quotation/invoice workflow
     return <QuotationInvoiceFlow currentUser={currentUser} onNavigate={onNavigate} />;
