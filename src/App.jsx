@@ -1901,16 +1901,90 @@ const ImportDashboard = () => {
 };
 
 const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
-    // This is a placeholder for the real component logic.
-    // You will build out the forms and state management here.
+    const [customers, setCustomers] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    
+    // Form State
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [quotationItems, setQuotationItems] = useState([]);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+
+    // Fetch initial data for customers and stock
+    const fetchPrerequisites = useCallback(async () => {
+        setLoading(true);
+        try {
+            const customersSnap = await getDocs(collection(db, "import_customers"));
+            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            
+            // We'll add stock fetching later
+            // const stockSnap = await getDocs(collection(db, "import_stock"));
+            // setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            
+        } catch (err) {
+            console.error(err);
+            setError("Failed to load required data. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchPrerequisites();
+    }, [fetchPrerequisites]);
+    
+    // Handler for when a new customer is added via the modal
+    const handleCustomerAdded = (newCustomer) => {
+        // Add new customer to our list and auto-select them
+        setCustomers(prev => [...prev, newCustomer]);
+        setSelectedCustomerId(newCustomer.id);
+        setIsCustomerModalOpen(false);
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
     return (
         <div className="p-4 sm:p-8">
-            <h2 className="text-3xl font-bold text-gray-800">Create Quotation / Invoice</h2>
-            <div className="mt-6 bg-white p-8 rounded-xl shadow-lg">
-                <p className="text-gray-600">This section is under construction. The form to add customers, select products, and generate quotations and invoices will be built here.</p>
-                <button onClick={() => onNavigate('invoices')} className="mt-4 bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">
-                    View All Invoices
-                </button>
+            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl">
+                <CustomerManagement 
+                    portalType="import" 
+                    isModal={true} 
+                    onCustomerAdded={handleCustomerAdded}
+                    onClose={() => setIsCustomerModalOpen(false)}
+                />
+            </Modal>
+
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Create New Quotation</h2>
+            
+            {/* Step 1: Customer Selection */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="md:col-span-2">
+                        <label htmlFor="customer-select" className="block text-sm font-medium text-gray-600 mb-1">
+                            Existing Customer
+                        </label>
+                        <select
+                            id="customer-select"
+                            value={selectedCustomerId}
+                            onChange={(e) => setSelectedCustomerId(e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded-md bg-white shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="">-- Choose a customer --</option>
+                            {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                         <button 
+                            onClick={() => setIsCustomerModalOpen(true)}
+                            className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                         >
+                            <PlusCircleIcon /> Add New Customer
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );
