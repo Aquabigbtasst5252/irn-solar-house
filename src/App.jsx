@@ -1572,7 +1572,7 @@ const ProductManagement = ({ currentUser }) => {
         setIsCostSheetModalOpen(true);
     };
 
-    const exportCostSheetPDF = (product) => {
+const exportCostSheetPDF = (product) => {
         if (currentUser.role !== 'super_admin' && currentUser.role !== 'admin') {
             alert("You don't have permission to export cost sheets.");
             return;
@@ -1581,6 +1581,13 @@ const ProductManagement = ({ currentUser }) => {
             alert("Letterhead is still loading or failed to load. Please wait a moment or check the console for errors, then try again.");
             return;
         }
+        
+        // --- NEW: Add this check to prevent the error ---
+        if (!product.items || product.items.length === 0) {
+            alert("Cannot generate a cost sheet for a product with no raw material items added.");
+            return;
+        }
+        // --- End of new check ---
 
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
