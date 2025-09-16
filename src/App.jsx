@@ -1617,7 +1617,7 @@ const exportCostSheetPDF = (product) => {
             doc.setFont(undefined, 'normal');
             doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
             
-            // --- MODIFIED: Simplified Raw Materials Table Data ---
+            // Raw Materials Table
             const itemData = product.items.map(item => [
                 item.name || 'N/A',
                 item.model || 'N/A',
@@ -1625,15 +1625,9 @@ const exportCostSheetPDF = (product) => {
                 `LKR ${(item.avgCostLKR || 0).toFixed(2)}`,
                 `LKR ${((item.qty || 0) * (item.avgCostLKR || 0)).toFixed(2)}`
             ]);
-            // Add a simpler total row without complex objects
             itemData.push([
-                'Raw Material Total', 
-                '', 
-                '', 
-                '', 
-                `LKR ${product.rawMaterialCost.toFixed(2)}`
+                'Raw Material Total', '', '', '', `LKR ${product.rawMaterialCost.toFixed(2)}`
             ]);
-            // --- END OF MODIFICATION ---
 
             autoTable(doc, {
                 startY: topMargin + 25,
@@ -1641,31 +1635,24 @@ const exportCostSheetPDF = (product) => {
                 body: itemData,
                 theme: 'striped',
                 headStyles: { fillColor: [22, 160, 133], textColor: 255 },
-                // Style the last row to make it look like a total
                 didParseCell: function (data) {
                     if (data.row.index === itemData.length - 1) {
                         data.cell.styles.fontStyle = 'bold';
-                        data.cell.styles.halign = 'right';
-                        if (data.column.index > 0) {
-                           data.cell.styles.halign = 'left'; 
-                        }
-                        if (data.column.index === 4) {
-                           data.cell.styles.halign = 'left';
-                        }
                     }
                 },
                 margin: { left: leftMargin, right: rightMargin },
                 didDrawPage: (data) => {
-                    if (data.pageNumber > 1) {
-                        addLetterhead();
-                    }
+                    if (data.pageNumber > 1) addLetterhead();
                 }
             });
             
             if (!doc.autoTable.previous) {
-                alert("Error: Could not generate the raw materials table. Please check if all items have valid names, quantities, and costs.");
+                alert("Error: Could not generate the raw materials table.");
                 return; 
             }
+
+            const firstTableFinalY = doc.autoTable.previous.finalY;
+            let finalY = firstTableFinalY; // Initialize finalY with the position after the first table
 
             // Additional Costs Table
             const costData = [
@@ -1677,18 +1664,20 @@ const exportCostSheetPDF = (product) => {
             ];
 
             autoTable(doc, {
-                startY: doc.autoTable.previous.finalY + 10,
+                startY: firstTableFinalY + 10,
                 head: [['Additional Cost Component', 'Amount (LKR)']],
                 body: costData,
                 theme: 'grid',
                 headStyles: { fillColor: [44, 62, 80] },
                 margin: { left: leftMargin, right: rightMargin },
-                didDrawPage: (data) => addLetterhead()
+                // --- THIS IS THE FIX: Manually capture the final Y position ---
+                didDrawPage: function (data) {
+                    finalY = data.cursor.y; // Update finalY with the cursor position after this table is drawn
+                    addLetterhead();
+                }
             });
             
-            const finalY = doc.autoTable.previous.finalY;
-
-            // Final Summary
+            // Final Summary - Now uses the manually captured 'finalY'
             doc.setFontSize(12);
             doc.setFont(undefined, 'bold');
             doc.text('Total Production Cost:', leftMargin, finalY + 12);
