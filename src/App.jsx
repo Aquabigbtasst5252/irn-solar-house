@@ -1360,14 +1360,6 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
 
 // ====================================================================================
 // --- REVISED PRODUCT MANAGEMENT COMPONENT ---
-// ====================================================================================
-// ====================================================================================
-// --- REVISED PRODUCT MANAGEMENT COMPONENT (using HTML-to-PDF method) ---
-// ====================================================================================
-import ReactDOM from 'react-dom/client'; // Make sure to import this at the top of App.jsx
-import html2canvas from 'html2canvas';   // And import the new library
-import jsPDF from 'jspdf';               // We still need jsPDF
-
 // --- NEW COMPONENT: This is the visual template for your PDF ---
 // You can place this component right before the ProductManagement component in your App.jsx file
 const PrintableCostSheet = ({ product, letterheadBase64 }) => {
