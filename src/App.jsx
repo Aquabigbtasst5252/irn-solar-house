@@ -1804,7 +1804,7 @@ const ImportDashboard = () => {
 
                 // Find low stock items
                 const stockList = stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const lowItems = stockList.filter(item => item.qty <= (item.reorderLevel || 0));
+                const lowItems = stockList.filter(item => item.reorderLevel && item.qty <= item.reorderLevel);
                 setLowStockItems(lowItems);
 
             } catch (error) {
@@ -2482,13 +2482,9 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
         contactHotline: "+94 77 750 1836",
         contactEmail: "easytime1@gmail.com",
         contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
-        mapEmbedURL: ""
     };
 
     const pageContent = content || defaultContent;
-    const googleMapsEmbedCode = pageContent.mapEmbedURL 
-        ? `<iframe src="${pageContent.mapEmbedURL}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
-        : '<p class="text-center p-8 bg-gray-100">Map not available. Please configure the map URL in the admin panel.</p>';
 
     return (
         <div className="bg-white text-gray-800 font-sans">
@@ -2546,20 +2542,13 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            <section id="location" className="bg-white pt-16 sm:pt-24">
-                <div className="container mx-auto px-6">
-                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Main Showroom</h2>
-                </div>
-                <div className="w-screen relative left-1/2 -translate-x-1/2" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
-            </section>
-
             {pageContent.showrooms && pageContent.showrooms.length > 0 && (
-                <section id="showrooms" className="py-16 sm:py-24 bg-gray-50">
+                <section id="showrooms" className="py-16 sm:py-24 bg-white">
                     <div className="container mx-auto px-6">
-                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Other Branches</h2>
+                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showrooms</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {pageContent.showrooms.map((showroom, index) => (
-                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg text-center">
+                                <div key={index} className="bg-gray-50 p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300">
                                     <h3 className="text-xl font-bold text-gray-800 mb-2">{showroom.name}</h3>
                                     <p className="text-gray-600 mb-4 h-16">{showroom.address}</p>
                                     <a href={showroom.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 transition-colors">
