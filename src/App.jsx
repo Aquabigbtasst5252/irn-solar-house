@@ -1370,7 +1370,7 @@ const PrintableCostSheet = ({ product, letterheadBase64 }) => {
             width: '210mm',  // A4 width
             height: '297mm', // A4 height
             margin: 0,
-            padding: '45mm',
+            padding: '25mm',
             fontFamily: 'Helvetica, Arial, sans-serif',
             color: '#333',
             backgroundImage: `url(${letterheadBase64})`,
