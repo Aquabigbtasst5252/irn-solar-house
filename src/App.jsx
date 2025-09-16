@@ -35,8 +35,8 @@ import {
 } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ReactDOM from 'react-dom/client'; // Make sure to import this at the top of App.jsx
-import html2canvas from 'html2canvas';   // And import the new library
+import ReactDOM from 'react-dom/client';
+import html2canvas from 'html2canvas';
 
 // --- Firebase Configuration ---
 const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
@@ -664,8 +664,15 @@ const StockManagement = ({ onViewImport }) => {
     const [breakdownData, setBreakdownData] = useState({ itemName: '', breakdown: {} });
     const [modalLoading, setModalLoading] = useState(false);
 
-
-    const openAddModal = () => { setIsEditing(false); setFormData({ qty: 0 }); setIsModalOpen(true); };
+    const openAddModal = () => { 
+        setIsEditing(false); 
+        const newSerialNumber = `ITEM-${Date.now().toString().slice(-6)}`;
+        setFormData({ 
+            qty: 0, 
+            serialNumber: newSerialNumber
+        }); 
+        setIsModalOpen(true); 
+    };
     const openEditModal = (item) => { setIsEditing(true); setFormData(item); setIsModalOpen(true); };
 
     const fetchStockAndShops = useCallback(async () => {
@@ -729,10 +736,10 @@ const StockManagement = ({ onViewImport }) => {
             if (isEditing) {
                 await updateDoc(doc(db, 'import_stock', dataToSave.id), dataToSave);
             } else {
-                dataToSave.qty = 0;
+                if (!dataToSave.qty) dataToSave.qty = 0;
                 await addDoc(collection(db, 'import_stock'), dataToSave);
             }
-            await fetchStockAndShops(); // Refresh data
+            await fetchStockAndShops();
             setIsModalOpen(false);
             setFormData({});
         } catch (err) { 
@@ -743,7 +750,7 @@ const StockManagement = ({ onViewImport }) => {
                     case 'storage/unauthorized':
                         userMessage = "Permission Error: You do not have rights to upload images. Please contact an administrator.";
                         break;
-                    case 'permission-denied': // Firestore permission error
+                    case 'permission-denied':
                         userMessage = "Permission Error: You do not have rights to save stock data. Please contact an administrator.";
                         break;
                     default:
@@ -769,27 +776,15 @@ const StockManagement = ({ onViewImport }) => {
         }
     };
     
-    // New function to delete only the image
     const handleDeleteImage = async () => {
         if (!formData.imagePath) return;
         if (window.confirm("Are you sure you want to delete this picture?")) {
             try {
-                // Delete from Storage
                 await deleteObject(ref(storage, formData.imagePath));
-                
-                // Update Firestore document
                 const itemDocRef = doc(db, 'import_stock', formData.id);
-                await updateDoc(itemDocRef, {
-                    imageUrl: '',
-                    imagePath: ''
-                });
-
-                // Update local state to reflect change
+                await updateDoc(itemDocRef, { imageUrl: '', imagePath: '' });
                 setFormData(prev => ({...prev, imageUrl: '', imagePath: ''}));
-                
-                // Refresh the main stock list
                 await fetchStockAndShops();
-
             } catch(err) {
                 console.error("Failed to delete image", err);
                 setError("Could not delete the image. Please try again.");
@@ -860,7 +855,6 @@ const StockManagement = ({ onViewImport }) => {
 
     if(loading) return <div className="p-8 text-center">Loading Stock...</div>;
     
-
     return (
         <div className="p-4 sm:p-8">
              {error && <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert"><span className="font-medium">Error:</span> {error}</div>}
@@ -928,6 +922,10 @@ const StockManagement = ({ onViewImport }) => {
                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Stock Item' : 'Add New Stock Item'}</h3>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                      <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Item Details</legend>
+                        <div className="mb-4">
+                            <label>Serial Number</label>
+                            <input type="text" name="serialNumber" readOnly value={formData.serialNumber || ''} className="w-full p-2 border rounded bg-gray-100"/>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label>Item Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
                             <div><label>Model</label><input type="text" name="model" value={formData.model || ''} onChange={handleInputChange} className="w-full p-2 border rounded"/></div>
@@ -962,11 +960,14 @@ const StockManagement = ({ onViewImport }) => {
             <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-gray-800">Stock Management</h2><button onClick={openAddModal} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Add Item</button></div>
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b"><input type="text" placeholder="Search by item name or model..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100"><th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-left">Status</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
+                <div className="overflow-x-auto"><table className="min-w-full"><thead><tr className="bg-gray-100">
+                    <th className="px-5 py-3 text-left">Serial No.</th>
+                    <th className="px-5 py-3 text-left">Item</th><th className="px-5 py-3 text-left">Total Qty</th><th className="px-5 py-3 text-left">Status</th><th className="px-5 py-3 text-center">Actions</th></tr></thead>
                     <tbody>{filteredStock.map(item => {
                         const atReorderLevel = item.reorderLevel && (item.qty <= item.reorderLevel);
                         return (
                         <tr key={item.id} className={`border-b hover:bg-gray-100 ${atReorderLevel ? 'bg-red-50' : ''}`}>
+                            <td className="px-5 py-4 text-sm font-mono">{item.serialNumber}</td>
                             <td className="px-5 py-4 flex items-center"><img src={item.imageUrl || 'https://placehold.co/60x60/EEE/31343C?text=No+Image'} alt={item.name} className="w-16 h-16 object-cover rounded mr-4"/><div className="flex-grow"><p className={`font-semibold ${atReorderLevel ? 'text-red-900' : ''}`}>{item.name}</p><p className="text-sm text-gray-600">{item.model}</p></div></td>
                             <td className={`px-5 py-4 text-sm font-semibold ${atReorderLevel ? 'text-red-900' : ''}`}>{item.qty} {item.uom}</td>
                             <td className="px-5 py-4 text-sm">
@@ -1358,17 +1359,13 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
     );
 };
 
-// ====================================================================================
-// --- REVISED PRODUCT MANAGEMENT COMPONENT ---
-// --- NEW COMPONENT: This is the visual template for your PDF ---
-// You can place this component right before the ProductManagement component in your App.jsx file
 const PrintableCostSheet = ({ product, letterheadBase64 }) => {
     return (
         <div style={{
             position: 'absolute',
-            left: '-9999px', // Render off-screen
-            width: '210mm',  // A4 width
-            height: '297mm', // A4 height
+            left: '-9999px',
+            width: '210mm',
+            height: '297mm',
             margin: 0,
             padding: '25mm',
             fontFamily: 'Helvetica, Arial, sans-serif',
@@ -1456,9 +1453,6 @@ const PrintableCostSheet = ({ product, letterheadBase64 }) => {
 };
 
 const ProductManagement = ({ currentUser }) => {
-    // ... all your existing useState, useEffect, useCallback hooks are still here ...
-    // ... including fetchData, handleCreateNew, handleEdit, etc. ...
-    // ... I'm just replacing the export function. Keep everything else!
     const [view, setView] = useState('list');
     const [products, setProducts] = useState([]);
     const [stockItems, setStockItems] = useState([]);
@@ -1577,7 +1571,6 @@ const ProductManagement = ({ currentUser }) => {
     const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase()));
     const filteredStockItems = stockItems.filter(item => item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase()));
 
-    // --- REWRITTEN EXPORT FUNCTION ---
     const exportCostSheetPDF = async (product) => {
         if (!product.items || product.items.length === 0) {
             alert("Cannot generate a cost sheet for a product with no items.");
@@ -1588,21 +1581,18 @@ const ProductManagement = ({ currentUser }) => {
             return;
         }
 
-        // Create a temporary container to render our component into
         const printableElement = document.createElement('div');
         document.body.appendChild(printableElement);
         const root = ReactDOM.createRoot(printableElement);
 
-        // Render the PrintableCostSheet component
         root.render(<PrintableCostSheet product={product} letterheadBase64={letterheadBase64} />);
 
-        // Give React a moment to render the component
         await new Promise(resolve => setTimeout(resolve, 500));
         
         try {
             const sheetElement = printableElement.querySelector('div');
             const canvas = await html2canvas(sheetElement, { 
-                scale: 2, // Higher scale for better quality
+                scale: 2,
                 useCORS: true 
             });
 
@@ -1618,16 +1608,13 @@ const ProductManagement = ({ currentUser }) => {
             console.error("Failed to generate PDF:", e);
             alert("An error occurred while generating the PDF.");
         } finally {
-            // Clean up the temporary element from the DOM
             root.unmount();
             printableElement.remove();
         }
     };
-    // The rest of your ProductManagement component's return(...) JSX remains the same
     if(loading) return <div className="p-8 text-center">Loading...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
-    // ... all the form view and list view JSX is here ...
-    // Make sure to copy the full component return statement from your original file
+
      if (view === 'form') {
         return (
             <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
@@ -1772,7 +1759,6 @@ const ProductManagement = ({ currentUser }) => {
 const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
 
-// --- NEW, FUNCTIONAL SUPPLIER MANAGEMENT COMPONENT ---
 const SupplierManagement = () => {
     const [suppliers, setSuppliers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1916,9 +1902,6 @@ const SupplierManagement = () => {
     );
 };
 
-// ====================================================================================
-// --- WEBSITE MANAGEMENT COMPONENT (FINAL, COMPLETE, AND CORRECTED VERSION) ---
-// ====================================================================================
 const WebsiteManagementPortal = ({ currentUser }) => {
     // State for data
     const [content, setContent] = useState(null);
@@ -2270,8 +2253,6 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     );
 };
 
-
-// --- Product Category Page Component ---
 const ProductCategoryPage = ({ categoryId, onBack }) => {
     const [category, setCategory] = useState(null);
     const [models, setModels] = useState([]);
@@ -2407,7 +2388,6 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                     <source src="/hero-video.mp4" type="video/mp4" />
                     Your browser does not support the video tag.
                 </video>
-                {/* THIS DIV WAS REMOVED: <div className="absolute z-10 w-full h-full bg-black bg-opacity-40"></div> */}
             </section>
             
             <section id="about" className="py-16 sm:py-24 bg-white">
@@ -2440,11 +2420,9 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
             </section>
 
             <section id="location" className="bg-white pt-16 sm:pt-24">
-                {/* This container still centers the title */}
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
                 </div>
-                {/* These new classes force the map to be full-width */}
                 <div className="w-screen relative left-1/2 -translate-x-1/2" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
             </section>
 
@@ -2484,14 +2462,13 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
         </div>
     );
 };
-// --- Main App & Dashboard Structure ---
+
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('import_dashboard');
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
     const [importDropdownOpen, setImportDropdownOpen] = useState(false);
     const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
     
-    // State lifted up to manage cross-component view changes
     const [importToView, setImportToView] = useState(null);
 
     const adminDropdownRef = useRef(null);
@@ -2517,7 +2494,6 @@ const Dashboard = ({ user, onSignOut }) => {
         else if (hasExportAccess) setCurrentView('export_dashboard');
     }, [hasImportAccess, hasExportAccess]);
     
-    // When importToView is set, switch to the import management view
     useEffect(() => {
         if (importToView) {
             setCurrentView('import_management');
