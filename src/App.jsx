@@ -336,7 +336,7 @@ const UserManagementPortal = ({ currentUser }) => {
         </div>
     );
 };
-const CustomerManagement = ({ portalType }) => {
+const CustomerManagement = ({ portalType, isModal = false, onCustomerAdded, onClose }) => {
     const isImport = portalType === 'import';
     const collectionName = isImport ? 'import_customers' : 'export_customers';
     const portalTitle = isImport ? 'Import Customer Management' : 'Export Customer Management';
@@ -346,7 +346,7 @@ const CustomerManagement = ({ portalType }) => {
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isFormVisible, setIsFormVisible] = useState(isModal);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({});
 
@@ -402,7 +402,6 @@ const CustomerManagement = ({ portalType }) => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        // Check for duplicates
         const isDuplicate = customers.some(customer => 
             customer.email.toLowerCase() === formData.email.toLowerCase() && customer.id !== formData.id
         );
@@ -416,29 +415,35 @@ const CustomerManagement = ({ portalType }) => {
             if (isEditing) {
                 const docRef = doc(db, collectionName, formData.id);
                 await updateDoc(docRef, formData);
-                setCustomers(prev => prev.map(c => c.id === formData.id ? formData : c));
             } else {
                 const dataToSave = { ...formData, registerDate: Timestamp.now() };
                 const newDocRef = await addDoc(collection(db, collectionName), dataToSave);
-                setCustomers(prev => [...prev, {id: newDocRef.id, ...dataToSave}]);
+                if(onCustomerAdded) {
+                    onCustomerAdded({id: newDocRef.id, ...dataToSave});
+                }
             }
-            setIsModalOpen(false);
+            await fetchCustomers(); // Re-fetch all customers to have a fresh list
+            if (isModal) {
+                if (onClose) onClose();
+            } else {
+                setIsFormVisible(false);
+            }
         } catch (err) {
             setError('Failed to save customer data.');
             console.error(err);
         }
     };
-
+    
     const openAddModal = () => {
         setIsEditing(false);
         setFormData({ country: isImport ? 'Sri Lanka' : '' });
-        setIsModalOpen(true);
+        setIsFormVisible(true);
     };
 
     const openEditModal = (customer) => {
         setIsEditing(true);
         setFormData(customer);
-        setIsModalOpen(true);
+        setIsFormVisible(true);
     };
 
     const handleDelete = async (customerId) => {
@@ -456,29 +461,45 @@ const CustomerManagement = ({ portalType }) => {
         c.telephone?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const renderForm = () => (
+        <form onSubmit={handleFormSubmit} className="space-y-4">
+            <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+            <div><label className="block text-sm font-medium text-gray-700">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea></div>
+            <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+            <div><label className="block text-sm font-medium text-gray-700">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+            {!isImport && (<>
+                <div><label className="block text-sm font-medium text-gray-700">Company Name (optional)</label><input type="text" name="companyName" value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                <div><label className="block text-sm font-medium text-gray-700">Country</label><select name="country" required value={formData.country || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"><option value="">Select a country</option>{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            </>)}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Latitude</label><input type="number" step="any" name="latitude" value={formData.latitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Longitude</label><input type="number" step="any" name="longitude" value={formData.longitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+                <div className="md:col-span-1"><button type="button" onClick={openMapSelector} className="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Select on Map</button></div>
+            </div>
+            <div className="flex justify-end pt-4 space-x-2">
+                {onClose && <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>}
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Customer'}</button>
+            </div>
+        </form>
+    );
+
+    if (isModal) {
+        return (
+            <div>
+                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Customer' : 'Add New Customer'}</h3>
+                {renderForm()}
+            </div>
+        );
+    }
+    
     if (loading) return <div className="text-center p-10">Loading Customers...</div>;
     if (error) return <div className="text-center p-10 text-red-500">{error}</div>;
-
+    
     return (
         <div className="p-4 sm:p-8">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-                <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Customer' : 'Add New Customer'}</h3>
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <div><label className="block text-sm font-medium text-gray-700">Name</label><input type="text" name="name" required value={formData.name || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Address</label><textarea name="address" required value={formData.address || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Email</label><input type="email" name="email" required value={formData.email || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                    <div><label className="block text-sm font-medium text-gray-700">Telephone</label><input type="tel" name="telephone" required value={formData.telephone || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                    {!isImport && (<>
-                        <div><label className="block text-sm font-medium text-gray-700">Company Name (optional)</label><input type="text" name="companyName" value={formData.companyName || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                        <div><label className="block text-sm font-medium text-gray-700">Country</label><select name="country" required value={formData.country || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-white"><option value="">Select a country</option>{countries.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </>)}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Latitude</label><input type="number" step="any" name="latitude" value={formData.latitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                        <div className="md:col-span-1"><label className="block text-sm font-medium text-gray-700">Longitude</label><input type="number" step="any" name="longitude" value={formData.longitude || ''} onChange={handleInputChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-                        <div className="md:col-span-1"><button type="button" onClick={openMapSelector} className="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700">Select on Map</button></div>
-                    </div>
-                    <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isEditing ? 'Save Changes' : 'Register Customer'}</button></div>
-                </form>
+            <Modal isOpen={!isModal && isFormVisible} onClose={() => setIsFormVisible(false)}>
+                 <h3 className="text-xl font-bold mb-4">{isEditing ? 'Edit Customer' : 'Add New Customer'}</h3>
+                 {renderForm()}
             </Modal>
 
             <div className="flex justify-between items-center mb-6">
@@ -1795,7 +1816,7 @@ const ImportDashboard = () => {
                 ]);
 
                 // Calculate stats
-                const totalSales = invoicesSnap.docs.reduce((sum, doc) => sum + doc.data().total, 0);
+                const totalSales = invoicesSnap.docs.reduce((sum, doc) => sum + (doc.data().total || 0), 0);
                 const invoiceCount = invoicesSnap.size;
                 const quotationCount = quotationsSnap.size;
                 const customerCount = customersSnap.size;
@@ -1879,11 +1900,106 @@ const ImportDashboard = () => {
     );
 };
 
-const QuotationManagement = ({ currentUser }) => { 
-    return <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Quotation Management</h2><p className="mt-4 text-gray-600">This feature is currently under development.</p></div>
+const QuotationManagement = ({ currentUser, onNavigate }) => { 
+    // This is the main component for quotation/invoice workflow
+    return <QuotationInvoiceFlow currentUser={currentUser} onNavigate={onNavigate} />;
 };
-const InvoiceManagement = ({ currentUser }) => { 
-    return <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Invoice Management</h2><p className="mt-4 text-gray-600">This feature is currently under development.</p></div>
+const InvoiceManagement = ({ currentUser, onNavigate }) => { 
+    // This component will now list invoices
+    const [invoices, setInvoices] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [letterheadBase64, setLetterheadBase64] = useState('');
+
+    useEffect(() => {
+        const fetchLetterhead = async () => {
+            try {
+                const response = await fetch('/IRN Solar House.png');
+                if (!response.ok) throw new Error('Letterhead not found');
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => setLetterheadBase64(reader.result);
+                reader.readAsDataURL(blob);
+            } catch (err) { console.error("Failed to load letterhead image:", err); }
+        };
+        fetchLetterhead();
+    }, []);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [invoicesSnap, customersSnap] = await Promise.all([
+                getDocs(query(collection(db, "invoices"), orderBy("createdAt", "desc"))),
+                getDocs(collection(db, "import_customers"))
+            ]);
+            setInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (err) {
+            setError("Failed to fetch invoices.");
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+    
+    const exportToPDF = (invoice) => {
+        if (!letterheadBase64) {
+            alert("Letterhead not loaded. Please try again in a moment.");
+            return;
+        }
+        const customer = customers.find(c => c.id === invoice.customerId);
+        generatePdf(invoice, 'invoice', letterheadBase64, customer);
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Invoices...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-3xl font-bold text-gray-800">Invoice Management</h2>
+                <button onClick={() => onNavigate('quotation_management')} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    <PlusCircleIcon /> Create New
+                </button>
+            </div>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead>
+                        <tr className="bg-gray-100">
+                            <th className="px-5 py-3 text-left">Invoice #</th>
+                            <th className="px-5 py-3 text-left">Customer</th>
+                            <th className="px-5 py-3 text-left">Date</th>
+                            <th className="px-5 py-3 text-left">Total (LKR)</th>
+                            <th className="px-5 py-3 text-left">Warranty End</th>
+                            <th className="px-5 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {invoices.map(invoice => {
+                             const customer = customers.find(c => c.id === invoice.customerId);
+                             return (
+                                <tr key={invoice.id} className="border-b hover:bg-gray-50">
+                                    <td className="px-5 py-4 font-mono">{invoice.id}</td>
+                                    <td className="px-5 py-4">{customer?.name || 'N/A'}</td>
+                                    <td className="px-5 py-4 text-sm">{invoice.createdAt.toDate().toLocaleDateString()}</td>
+                                    <td className="px-5 py-4 font-semibold">{invoice.total.toFixed(2)}</td>
+                                    <td className="px-5 py-4 text-sm">{invoice.warrantyEndDate || 'N/A'}</td>
+                                    <td className="px-5 py-4 text-center">
+                                        <button onClick={() => exportToPDF(invoice)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon /></button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 };
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
 const SupplierManagement = () => {
@@ -2605,13 +2721,16 @@ const Dashboard = ({ user, onSignOut }) => {
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
 
+    // Set default view on login
     useEffect(() => {
         if (hasImportAccess) {
             setCurrentView('import_dashboard');
         } else if (hasExportAccess) {
             setCurrentView('export_dashboard');
+        } else {
+             setCurrentView('import_dashboard'); // Fallback for any other roles
         }
-    }, [hasImportAccess, hasExportAccess]);
+    }, [hasImportAccess, hasExportAccess, user.role]);
     
     useEffect(() => {
         if (importToView) {
@@ -2632,13 +2751,13 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'import_shop_management': return <ShopManagement />;
             case 'import_supplier_management': return <SupplierManagement />;
             case 'import_product_management': return <ProductManagement currentUser={user} />;
-            case 'quotation_management': return <QuotationManagement currentUser={user} />;
-            case 'invoices': return <InvoiceManagement currentUser={user} />;
+            case 'quotation_management': return <QuotationManagement currentUser={user} onNavigate={setCurrentView} />;
+            case 'invoices': return <InvoiceManagement currentUser={user} onNavigate={setCurrentView} />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
             case 'website_management': return <WebsiteManagementPortal currentUser={user} />;
-            default: return (<div>Welcome! Please select an option from the navigation bar.</div>);
+            default: return <ImportDashboard />;
         }
     };
 
