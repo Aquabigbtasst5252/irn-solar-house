@@ -1577,10 +1577,11 @@ const exportCostSheetPDF = (product) => {
             alert("You don't have permission to export cost sheets.");
             return;
         }
-        if (!letterheadBase64) {
-            alert("Letterhead is still loading or failed to load. Please wait a moment or check the console for errors, then try again.");
-            return;
-        }
+        // NOTE: The letterhead is still loaded, we're just not adding it to the PDF for this test.
+        // if (!letterheadBase64) {
+        //     alert("Letterhead is still loading or failed to load...");
+        //     return;
+        // }
         
         if (!product.items || product.items.length === 0) {
             alert("Cannot generate a cost sheet for a product with no raw material items added.");
@@ -1595,11 +1596,12 @@ const exportCostSheetPDF = (product) => {
             const leftMargin = 20;
             const rightMargin = 15;
 
-            const addLetterhead = () => {
-                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-            };
-            
-            addLetterhead();
+            // --- Letterhead functionality TEMPORARILY DISABLED for testing ---
+            // const addLetterhead = () => {
+            //     doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+            // };
+            // addLetterhead();
+            // ---
 
             // Document Title & Product Info
             doc.setFontSize(20);
@@ -1619,7 +1621,7 @@ const exportCostSheetPDF = (product) => {
             
             // Raw Materials Table
             const itemData = product.items.map(item => [
-                item.name || 'N/A', // Use default values to prevent errors
+                item.name || 'N/A',
                 item.model || 'N/A',
                 item.qty || 0,
                 `LKR ${(item.avgCostLKR || 0).toFixed(2)}`,
@@ -1638,18 +1640,16 @@ const exportCostSheetPDF = (product) => {
                 headStyles: { fillColor: [22, 160, 133], textColor: 255 },
                 margin: { left: leftMargin, right: rightMargin },
                 didDrawPage: (data) => {
-                    if (data.pageNumber > 1) {
-                        addLetterhead();
-                    }
+                    // if (data.pageNumber > 1) {
+                    //     addLetterhead();
+                    // }
                 }
             });
-
-            // --- NEW: Safety check after drawing the first table ---
+            
             if (!doc.autoTable.previous) {
                 alert("Error: Could not generate the raw materials table. Please check if all items have valid names, quantities, and costs.");
                 return; 
             }
-            // --- End of safety check ---
 
             // Additional Costs Table
             const costData = [
@@ -1667,7 +1667,7 @@ const exportCostSheetPDF = (product) => {
                 theme: 'grid',
                 headStyles: { fillColor: [44, 62, 80] },
                 margin: { left: leftMargin, right: rightMargin },
-                didDrawPage: (data) => addLetterhead()
+                // didDrawPage: (data) => addLetterhead()
             });
             
             const finalY = doc.autoTable.previous.finalY;
