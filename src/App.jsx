@@ -1577,11 +1577,10 @@ const exportCostSheetPDF = (product) => {
             alert("You don't have permission to export cost sheets.");
             return;
         }
-        // NOTE: The letterhead is still loaded, we're just not adding it to the PDF for this test.
-        // if (!letterheadBase64) {
-        //     alert("Letterhead is still loading or failed to load...");
-        //     return;
-        // }
+        if (!letterheadBase64) {
+            alert("Letterhead is still loading or failed to load. Please wait a moment or check the console for errors, then try again.");
+            return;
+        }
         
         if (!product.items || product.items.length === 0) {
             alert("Cannot generate a cost sheet for a product with no raw material items added.");
@@ -1596,12 +1595,11 @@ const exportCostSheetPDF = (product) => {
             const leftMargin = 20;
             const rightMargin = 15;
 
-            // --- Letterhead functionality TEMPORARILY DISABLED for testing ---
-            // const addLetterhead = () => {
-            //     doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-            // };
-            // addLetterhead();
-            // ---
+            const addLetterhead = () => {
+                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+            };
+            
+            addLetterhead();
 
             // Document Title & Product Info
             doc.setFontSize(20);
@@ -1619,7 +1617,7 @@ const exportCostSheetPDF = (product) => {
             doc.setFont(undefined, 'normal');
             doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
             
-            // Raw Materials Table
+            // --- MODIFIED: Simplified Raw Materials Table Data ---
             const itemData = product.items.map(item => [
                 item.name || 'N/A',
                 item.model || 'N/A',
@@ -1627,10 +1625,15 @@ const exportCostSheetPDF = (product) => {
                 `LKR ${(item.avgCostLKR || 0).toFixed(2)}`,
                 `LKR ${((item.qty || 0) * (item.avgCostLKR || 0)).toFixed(2)}`
             ]);
+            // Add a simpler total row without complex objects
             itemData.push([
-                { content: 'Raw Material Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-                { content: `LKR ${product.rawMaterialCost.toFixed(2)}`, styles: { fontStyle: 'bold' } }
+                'Raw Material Total', 
+                '', 
+                '', 
+                '', 
+                `LKR ${product.rawMaterialCost.toFixed(2)}`
             ]);
+            // --- END OF MODIFICATION ---
 
             autoTable(doc, {
                 startY: topMargin + 25,
@@ -1638,11 +1641,24 @@ const exportCostSheetPDF = (product) => {
                 body: itemData,
                 theme: 'striped',
                 headStyles: { fillColor: [22, 160, 133], textColor: 255 },
+                // Style the last row to make it look like a total
+                didParseCell: function (data) {
+                    if (data.row.index === itemData.length - 1) {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.halign = 'right';
+                        if (data.column.index > 0) {
+                           data.cell.styles.halign = 'left'; 
+                        }
+                        if (data.column.index === 4) {
+                           data.cell.styles.halign = 'left';
+                        }
+                    }
+                },
                 margin: { left: leftMargin, right: rightMargin },
                 didDrawPage: (data) => {
-                    // if (data.pageNumber > 1) {
-                    //     addLetterhead();
-                    // }
+                    if (data.pageNumber > 1) {
+                        addLetterhead();
+                    }
                 }
             });
             
@@ -1667,7 +1683,7 @@ const exportCostSheetPDF = (product) => {
                 theme: 'grid',
                 headStyles: { fillColor: [44, 62, 80] },
                 margin: { left: leftMargin, right: rightMargin },
-                // didDrawPage: (data) => addLetterhead()
+                didDrawPage: (data) => addLetterhead()
             });
             
             const finalY = doc.autoTable.previous.finalY;
