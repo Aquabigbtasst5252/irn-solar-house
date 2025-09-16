@@ -1582,118 +1582,117 @@ const exportCostSheetPDF = (product) => {
             return;
         }
         
-        // --- NEW: Add this check to prevent the error ---
         if (!product.items || product.items.length === 0) {
             alert("Cannot generate a cost sheet for a product with no raw material items added.");
             return;
         }
-        // --- End of new check ---
 
-        const doc = new jsPDF('p', 'mm', 'a4');
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const topMargin = 45;
-        const leftMargin = 20;
-        const rightMargin = 15;
-        const contentWidth = pageWidth - leftMargin - rightMargin;
+        try {
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const topMargin = 45;
+            const leftMargin = 20;
+            const rightMargin = 15;
 
-        const addLetterhead = () => {
-            doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-        };
-        
-        addLetterhead();
+            const addLetterhead = () => {
+                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+            };
+            
+            addLetterhead();
 
-        // --- Document Title ---
-        doc.setFontSize(20);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor('#333333');
-        doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
+            // Document Title & Product Info
+            doc.setFontSize(20);
+            doc.setFont(undefined, 'bold');
+            doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Product Name:`, leftMargin, topMargin + 12);
+            doc.setFont(undefined, 'bold');
+            doc.text(`${product.name}`, leftMargin + 32, topMargin + 12);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Serial Number:`, leftMargin, topMargin + 18);
+            doc.setFont(undefined, 'bold');
+            doc.text(`${product.serialNumber}`, leftMargin + 32, topMargin + 18);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
+            
+            // Raw Materials Table
+            const itemData = product.items.map(item => [
+                item.name || 'N/A', // Use default values to prevent errors
+                item.model || 'N/A',
+                item.qty || 0,
+                `LKR ${(item.avgCostLKR || 0).toFixed(2)}`,
+                `LKR ${((item.qty || 0) * (item.avgCostLKR || 0)).toFixed(2)}`
+            ]);
+            itemData.push([
+                { content: 'Raw Material Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: `LKR ${product.rawMaterialCost.toFixed(2)}`, styles: { fontStyle: 'bold' } }
+            ]);
 
-        // --- Product Info ---
-        doc.setFontSize(11);
-        doc.setFont(undefined, 'normal');
-        doc.setTextColor('#555555');
-        doc.text(`Product Name:`, leftMargin, topMargin + 12);
-        doc.setFont(undefined, 'bold');
-        doc.text(`${product.name}`, leftMargin + 32, topMargin + 12);
-
-        doc.setFont(undefined, 'normal');
-        doc.text(`Serial Number:`, leftMargin, topMargin + 18);
-        doc.setFont(undefined, 'bold');
-        doc.text(`${product.serialNumber}`, leftMargin + 32, topMargin + 18);
-        
-        doc.setFont(undefined, 'normal');
-        doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
-        
-        // --- Raw Materials Table ---
-        const itemData = product.items.map(item => [
-            item.name,
-            item.model,
-            item.qty,
-            `LKR ${item.avgCostLKR.toFixed(2)}`,
-            `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
-        ]);
-        itemData.push([
-            { content: 'Raw Material Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
-            { content: `LKR ${product.rawMaterialCost.toFixed(2)}`, styles: { fontStyle: 'bold' } }
-        ]);
-
-        autoTable(doc, {
-            startY: topMargin + 25,
-            head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
-            body: itemData,
-            theme: 'striped',
-            headStyles: { fillColor: [22, 160, 133], textColor: 255 },
-            margin: { left: leftMargin, right: rightMargin },
-            didDrawPage: (data) => {
-                if (data.pageNumber > 1) { // Only add letterhead on new pages
-                    addLetterhead();
+            autoTable(doc, {
+                startY: topMargin + 25,
+                head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
+                body: itemData,
+                theme: 'striped',
+                headStyles: { fillColor: [22, 160, 133], textColor: 255 },
+                margin: { left: leftMargin, right: rightMargin },
+                didDrawPage: (data) => {
+                    if (data.pageNumber > 1) {
+                        addLetterhead();
+                    }
                 }
+            });
+
+            // --- NEW: Safety check after drawing the first table ---
+            if (!doc.autoTable.previous) {
+                alert("Error: Could not generate the raw materials table. Please check if all items have valid names, quantities, and costs.");
+                return; 
             }
-        });
+            // --- End of safety check ---
 
-        // --- Additional Costs Table ---
-        const costData = [
-            [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
-            [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
-            [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
-            [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
-            [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
-        ];
+            // Additional Costs Table
+            const costData = [
+                [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
+                [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
+                [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
+                [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
+                [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
+            ];
 
-        autoTable(doc, {
-            startY: doc.autoTable.previous.finalY + 10,
-            head: [['Additional Cost Component', 'Amount (LKR)']],
-            body: costData,
-            theme: 'grid',
-            headStyles: { fillColor: [44, 62, 80] },
-            margin: { left: leftMargin, right: rightMargin },
-            didDrawPage: (data) => addLetterhead()
-        });
-        
-        const finalY = doc.autoTable.previous.finalY;
+            autoTable(doc, {
+                startY: doc.autoTable.previous.finalY + 10,
+                head: [['Additional Cost Component', 'Amount (LKR)']],
+                body: costData,
+                theme: 'grid',
+                headStyles: { fillColor: [44, 62, 80] },
+                margin: { left: leftMargin, right: rightMargin },
+                didDrawPage: (data) => addLetterhead()
+            });
+            
+            const finalY = doc.autoTable.previous.finalY;
 
-        // --- Final Summary ---
-        doc.setFontSize(12);
-        doc.setFont(undefined, 'bold');
-        doc.setTextColor('#333333');
+            // Final Summary
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text('Total Production Cost:', leftMargin, finalY + 12);
+            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, finalY + 12, { align: 'right' });
+            doc.text(`Profit (${product.costing.profit}%):`, leftMargin, finalY + 19);
+            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, finalY + 19, { align: 'right' });
+            doc.setDrawColor(22, 160, 133);
+            doc.setLineWidth(0.5);
+            doc.line(leftMargin, finalY + 23, pageWidth - rightMargin, finalY + 23);
+            doc.setFontSize(16);
+            doc.setTextColor('#16A085');
+            doc.text('Final Selling Price:', leftMargin, finalY + 30);
+            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, finalY + 30, { align: 'right' });
+            
+            doc.save(`CostSheet-${product.serialNumber}.pdf`);
 
-        doc.text('Total Production Cost:', leftMargin, finalY + 12);
-        doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, finalY + 12, { align: 'right' });
-        
-        doc.text(`Profit (${product.costing.profit}%):`, leftMargin, finalY + 19);
-        doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, finalY + 19, { align: 'right' });
-
-        doc.setDrawColor(22, 160, 133);
-        doc.setLineWidth(0.5);
-        doc.line(leftMargin, finalY + 23, pageWidth - rightMargin, finalY + 23);
-        
-        doc.setFontSize(16);
-        doc.setTextColor('#16A085');
-        doc.text('Final Selling Price:', leftMargin, finalY + 30);
-        doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, finalY + 30, { align: 'right' });
-        
-        doc.save(`CostSheet-${product.serialNumber}.pdf`);
+        } catch (e) {
+            console.error("Failed to generate PDF:", e);
+            alert("An unexpected error occurred while generating the PDF. Please check the console for details.");
+        }
     };
 
     const filteredProducts = products.filter(p =>
