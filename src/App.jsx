@@ -1903,6 +1903,7 @@ const ImportDashboard = () => {
 const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
+    const [finishedProducts, setFinishedProducts] = useState([]); // For products from Product Management
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     
@@ -1910,17 +1911,25 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [quotationItems, setQuotationItems] = useState([]);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+    
+    // State for the new product selection logic
+    const [productType, setProductType] = useState('stock'); // 'stock' or 'finished'
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [selectedProductQty, setSelectedProductQty] = useState(1);
 
-    // Fetch initial data for customers and stock
+    // Fetch initial data for customers and all product types
     const fetchPrerequisites = useCallback(async () => {
         setLoading(true);
         try {
-            const customersSnap = await getDocs(collection(db, "import_customers"));
-            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const [customersSnap, stockSnap, productsSnap] = await Promise.all([
+                getDocs(collection(db, "import_customers")),
+                getDocs(collection(db, "import_stock")),
+                getDocs(collection(db, "products"))
+            ]);
             
-            // We'll add stock fetching later
-            // const stockSnap = await getDocs(collection(db, "import_stock"));
-            // setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             
         } catch (err) {
             console.error(err);
@@ -1934,58 +1943,131 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
         fetchPrerequisites();
     }, [fetchPrerequisites]);
     
-    // Handler for when a new customer is added via the modal
     const handleCustomerAdded = (newCustomer) => {
-        // Add new customer to our list and auto-select them
         setCustomers(prev => [...prev, newCustomer]);
         setSelectedCustomerId(newCustomer.id);
         setIsCustomerModalOpen(false);
     };
 
+    // Add selected item to the quotation list
+    const handleAddItemToQuotation = () => {
+        if (!selectedProductId || selectedProductQty <= 0) {
+            alert("Please select a product and enter a valid quantity.");
+            return;
+        }
+
+        const sourceList = productType === 'stock' ? stockItems : finishedProducts;
+        const productToAdd = sourceList.find(p => p.id === selectedProductId);
+
+        if (productToAdd) {
+            const newItem = {
+                id: productToAdd.id,
+                name: productToAdd.name,
+                model: productToAdd.model || '',
+                qty: Number(selectedProductQty),
+                unitPrice: productType === 'stock' ? (productToAdd.sellingPriceLKR || 0) : (productToAdd.finalUnitPrice || 0),
+                type: productType
+            };
+
+            setQuotationItems(prev => [...prev, newItem]);
+            // Reset selection
+            setSelectedProductId('');
+            setSelectedProductQty(1);
+        }
+    };
+    
+    const handleRemoveItem = (index) => {
+        setQuotationItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    // Memoize product list to avoid re-calculating on every render
+    const availableProducts = useMemo(() => {
+        return productType === 'stock' ? stockItems : finishedProducts;
+    }, [productType, stockItems, finishedProducts]);
+
     if (loading) return <div className="p-8 text-center">Loading...</div>;
     if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     return (
-        <div className="p-4 sm:p-8">
+        <div className="p-4 sm:p-8 space-y-6">
             <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl">
-                <CustomerManagement 
-                    portalType="import" 
-                    isModal={true} 
-                    onCustomerAdded={handleCustomerAdded}
-                    onClose={() => setIsCustomerModalOpen(false)}
-                />
+                <CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} />
             </Modal>
 
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Create New Quotation</h2>
+            <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
             
             {/* Step 1: Customer Selection */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div className="md:col-span-2">
-                        <label htmlFor="customer-select" className="block text-sm font-medium text-gray-600 mb-1">
-                            Existing Customer
-                        </label>
-                        <select
-                            id="customer-select"
-                            value={selectedCustomerId}
-                            onChange={(e) => setSelectedCustomerId(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-md bg-white shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        >
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label>
+                        <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
                             <option value="">-- Choose a customer --</option>
                             {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)}
                         </select>
                     </div>
-                    <div>
-                         <button 
-                            onClick={() => setIsCustomerModalOpen(true)}
-                            className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                         >
-                            <PlusCircleIcon /> Add New Customer
-                        </button>
-                    </div>
+                    <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div>
                 </div>
             </div>
+
+            {/* Step 2: Product Selection */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products to Quotation</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label>
+                        <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white">
+                            <option value="stock">Stock Item</option>
+                            <option value="finished">Finished Product</option>
+                        </select>
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label>
+                        <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
+                            <option value="">-- Choose a product --</option>
+                            {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                        <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/>
+                    </div>
+                    <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div>
+                 </div>
+            </div>
+            
+             {/* Step 3: Review Items */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Quotation Items</h3>
+                <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                        <thead className="bg-gray-100"><tr>
+                            <th className="px-4 py-2 text-left">Product Name</th>
+                            <th className="px-4 py-2 text-right">Quantity</th>
+                            <th className="px-4 py-2 text-right">Unit Price (LKR)</th>
+                            <th className="px-4 py-2 text-right">Total (LKR)</th>
+                            <th className="px-4 py-2 text-center">Actions</th>
+                        </tr></thead>
+                        <tbody>
+                            {quotationItems.length === 0 ? (
+                                <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr>
+                            ) : (
+                                quotationItems.map((item, index) => (
+                                    <tr key={index} className="border-b">
+                                        <td className="px-4 py-2">{item.name}</td>
+                                        <td className="px-4 py-2 text-right">{item.qty}</td>
+                                        <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-right font-semibold">{(item.qty * item.unitPrice).toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     );
 };
