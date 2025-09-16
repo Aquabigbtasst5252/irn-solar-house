@@ -35,6 +35,8 @@ import {
 } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ReactDOM from 'react-dom/client'; // Make sure to import this at the top of App.jsx
+import html2canvas from 'html2canvas';   // And import the new library
 
 // --- Firebase Configuration ---
 const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
@@ -1359,58 +1361,144 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
 // ====================================================================================
 // --- REVISED PRODUCT MANAGEMENT COMPONENT ---
 // ====================================================================================
+// ====================================================================================
+// --- REVISED PRODUCT MANAGEMENT COMPONENT (using HTML-to-PDF method) ---
+// ====================================================================================
+import ReactDOM from 'react-dom/client'; // Make sure to import this at the top of App.jsx
+import html2canvas from 'html2canvas';   // And import the new library
+import jsPDF from 'jspdf';               // We still need jsPDF
+
+// --- NEW COMPONENT: This is the visual template for your PDF ---
+// You can place this component right before the ProductManagement component in your App.jsx file
+const PrintableCostSheet = ({ product, letterheadBase64 }) => {
+    return (
+        <div style={{
+            position: 'absolute',
+            left: '-9999px', // Render off-screen
+            width: '210mm',  // A4 width
+            height: '297mm', // A4 height
+            margin: 0,
+            padding: 0,
+            fontFamily: 'Helvetica, Arial, sans-serif',
+            color: '#333',
+            backgroundImage: `url(${letterheadBase64})`,
+            backgroundSize: '100% 100%',
+        }}>
+            <div style={{ padding: '45mm 20mm 20mm 20mm' }}>
+                <h1 style={{ textAlign: 'center', fontSize: '22px', marginBottom: '15px' }}>
+                    Cost Sheet
+                </h1>
+                
+                <div style={{ fontSize: '11px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <p><strong>Product Name:</strong> {product.name}</p>
+                        <p><strong>Date Exported:</strong> {new Date().toLocaleDateString()}</p>
+                    </div>
+                    <p><strong>Serial Number:</strong> {product.serialNumber}</p>
+                </div>
+
+                <h2 style={{ fontSize: '14px', borderBottom: '1px solid #eee', paddingBottom: '5px', marginBottom: '10px' }}>
+                    Required Items
+                </h2>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                    <thead>
+                        <tr style={{ backgroundColor: '#16a085', color: 'white' }}>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>Item Name</th>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>Qty</th>
+                            <th style={{ padding: '8px', textAlign: 'right' }}>Unit Cost (LKR)</th>
+                            <th style={{ padding: '8px', textAlign: 'right' }}>Total Cost (LKR)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {product.items.map((item, index) => (
+                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                                <td style={{ padding: '8px' }}>{item.name}</td>
+                                <td style={{ padding: '8px' }}>{item.qty}</td>
+                                <td style={{ padding: '8px', textAlign: 'right' }}>{(item.avgCostLKR || 0).toFixed(2)}</td>
+                                <td style={{ padding: '8px', textAlign: 'right' }}>{((item.qty || 0) * (item.avgCostLKR || 0)).toFixed(2)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    <tfoot>
+                        <tr style={{ fontWeight: 'bold' }}>
+                            <td colSpan="3" style={{ padding: '10px 8px', textAlign: 'right' }}>Raw Material Total:</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right' }}>{product.rawMaterialCost.toFixed(2)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <h2 style={{ fontSize: '14px', borderBottom: '1px solid #eee', paddingBottom: '5px', margin: '20px 0 10px 0' }}>
+                    Cost Breakdown
+                </h2>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                     <tbody>
+                        {Object.entries(product.costBreakdown).filter(([key]) => !['rawMaterialCost', 'totalCost', 'profit'].includes(key)).map(([key, value], index) => {
+                             const name = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                             return (
+                                <tr key={key} style={{ backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'white' }}>
+                                    <td style={{ padding: '8px' }}>{name} ({product.costing[key]}%)</td>
+                                    <td style={{ padding: '8px', textAlign: 'right' }}>{value.toFixed(2)}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+                 <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '20px 0' }} />
+                 <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                        <span>Total Production Cost:</span>
+                        <span>LKR {product.costBreakdown.totalCost.toFixed(2)}</span>
+                    </div>
+                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Profit ({product.costing.profit}%):</span>
+                        <span>LKR {product.costBreakdown.profit.toFixed(2)}</span>
+                    </div>
+                </div>
+                 <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e8f8f5', color: '#16a085', textAlign: 'center', borderRadius: '5px' }}>
+                    <span style={{ fontSize: '14px', display: 'block' }}>Final Selling Price</span>
+                    <span style={{ fontSize: '24px', fontWeight: 'bold', display: 'block' }}>LKR {product.finalUnitPrice.toFixed(2)}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ProductManagement = ({ currentUser }) => {
-    const [view, setView] = useState('list'); // 'list', 'form'
+    // ... all your existing useState, useEffect, useCallback hooks are still here ...
+    // ... including fetchData, handleCreateNew, handleEdit, etc. ...
+    // ... I'm just replacing the export function. Keep everything else!
+    const [view, setView] = useState('list');
     const [products, setProducts] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [stockSearchTerm, setStockSearchTerm] = useState('');
-    const [productSearchTerm, setProductSearchTerm] = useState(''); 
+    const [productSearchTerm, setProductSearchTerm] = useState('');
     const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
     const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
     const [letterheadBase64, setLetterheadBase64] = useState('');
 
-    // Pre-load the letterhead image on component mount
     useEffect(() => {
         const fetchLetterhead = async () => {
             try {
-                const response = await fetch('/IRN Solar House.png'); // Fetches from the public folder
-                if (!response.ok) {
-                    throw new Error(`Letterhead image not found at /IRN Solar House.png (status: ${response.status})`);
-                }
+                const response = await fetch('/IRN Solar House.png');
+                if (!response.ok) throw new Error('Letterhead not found');
                 const blob = await response.blob();
                 const reader = new FileReader();
-                reader.onloadend = () => {
-                    setLetterheadBase64(reader.result); // This will be a base64 string
-                };
-                reader.onerror = () => {
-                    console.error("Failed to read the letterhead image blob.");
-                    setError("Failed to process letterhead image.");
-                };
+                reader.onloadend = () => setLetterheadBase64(reader.result);
                 reader.readAsDataURL(blob);
             } catch (err) {
                 console.error("Failed to load letterhead image:", err);
-                setError("Could not load the company letterhead. Please ensure 'IRN Solar House.png' is in the public folder.");
+                setError("Could not load company letterhead.");
             }
         };
         fetchLetterhead();
     }, []);
 
     const initialFormData = {
-        name: '',
-        description: '',
-        serialNumber: '',
-        items: [],
-        costing: {
-            employeeSalary: 0,
-            delivery: 0,
-            commission: 0,
-            serviceCharge: 0,
-            rent: 0,
-            profit: 10,
-        },
+        name: '', description: '', serialNumber: '', items: [],
+        costing: { employeeSalary: 0, delivery: 0, commission: 0, serviceCharge: 0, rent: 0, profit: 10 },
     };
     const [formData, setFormData] = useState(initialFormData);
 
@@ -1431,90 +1519,39 @@ const ProductManagement = ({ currentUser }) => {
             }));
 
             setStockItems(stockItemsWithCost);
-        } catch (err) {
-            console.error(err);
-            setError("Failed to load product data.");
-        } finally {
-            setLoading(false);
-        }
+        } catch (err) { console.error(err); setError("Failed to load product data."); } finally { setLoading(false); }
     }, []);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     const handleCreateNew = () => {
         setIsEditing(false);
-        setFormData({
-            ...initialFormData,
-            serialNumber: `PROD-${Date.now().toString().slice(-8)}`,
-        });
+        setFormData({ ...initialFormData, serialNumber: `PROD-${Date.now().toString().slice(-8)}` });
         setView('form');
     };
-
-    const handleEdit = (product) => {
-        setIsEditing(true);
-        setFormData(product);
-        setView('form');
-    };
-
+    const handleEdit = (product) => { setIsEditing(true); setFormData(product); setView('form'); };
     const handleDelete = async (productId) => {
-        if (currentUser.role !== 'super_admin') {
-            alert("You don't have permission to delete products.");
-            return;
-        }
+        if (currentUser.role !== 'super_admin') { alert("You don't have permission to delete products."); return; }
         if (window.confirm('Are you sure you want to delete this product definition?')) {
             try {
                 await deleteDoc(doc(db, 'products', productId));
                 setProducts(prev => prev.filter(p => p.id !== productId));
-            } catch (err) {
-                console.error(err);
-                setError('Failed to delete product.');
-            }
+            } catch (err) { console.error(err); setError('Failed to delete product.'); }
         }
     };
-    
-    const handleFormInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleCostingChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            costing: { ...prev.costing, [name]: parseFloat(value) || 0 }
-        }));
-    };
-    
+    const handleFormInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleCostingChange = (e) => setFormData(prev => ({ ...prev, costing: { ...prev.costing, [e.target.name]: parseFloat(e.target.value) || 0 } }));
     const handleAddItemToProduct = (stockItem) => {
         if (formData.items.some(i => i.stockItemId === stockItem.id)) return;
-        const newItem = {
-            stockItemId: stockItem.id,
-            name: stockItem.name,
-            model: stockItem.model,
-            avgCostLKR: stockItem.avgCostLKR,
-            qty: 1
-        };
+        const newItem = { stockItemId: stockItem.id, name: stockItem.name, model: stockItem.model, avgCostLKR: stockItem.avgCostLKR, qty: 1 };
         setFormData(prev => ({ ...prev, items: [...prev.items, newItem]}));
     };
-
-    const handleRemoveItemFromProduct = (stockItemId) => {
-        setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.stockItemId !== stockItemId)}));
-    };
-
-    const handleItemQuantityChange = (stockItemId, newQty) => {
-        setFormData(prev => ({
-            ...prev,
-            items: prev.items.map(item => item.stockItemId === stockItemId ? {...item, qty: parseFloat(newQty) || 0} : item)
-        }));
-    };
-
+    const handleRemoveItemFromProduct = (stockItemId) => setFormData(prev => ({ ...prev, items: prev.items.filter(i => i.stockItemId !== stockItemId)}));
+    const handleItemQuantityChange = (stockItemId, newQty) => setFormData(prev => ({ ...prev, items: prev.items.map(item => item.stockItemId === stockItemId ? {...item, qty: parseFloat(newQty) || 0} : item) }));
     const calculatedCosts = useMemo(() => {
         const rawMaterialCost = formData.items.reduce((acc, item) => acc + (item.qty * item.avgCostLKR), 0);
         let totalCost = rawMaterialCost;
         const costBreakdown = { rawMaterialCost };
-
         Object.entries(formData.costing).forEach(([key, value]) => {
             if (key !== 'profit') {
                 const costValue = rawMaterialCost * (value / 100);
@@ -1522,38 +1559,19 @@ const ProductManagement = ({ currentUser }) => {
                 costBreakdown[key] = costValue;
             }
         });
-
         const profitAmount = totalCost * (formData.costing.profit / 100);
         const finalUnitPrice = totalCost + profitAmount;
         costBreakdown.profit = profitAmount;
         costBreakdown.totalCost = totalCost;
         return { rawMaterialCost, finalUnitPrice, costBreakdown };
     }, [formData.items, formData.costing]);
-
     const handleSave = async () => {
-        if (!formData.name || formData.items.length === 0) {
-            alert('Product name and at least one item are required.');
-            return;
-        }
-        
-        const userInfo = {
-            uid: currentUser.uid,
-            displayName: currentUser.displayName || currentUser.email,
-        };
-
-        const dataToSave = {
-            ...formData,
-            finalUnitPrice: calculatedCosts.finalUnitPrice,
-            rawMaterialCost: calculatedCosts.rawMaterialCost,
-            costBreakdown: calculatedCosts.costBreakdown,
-            updatedAt: Timestamp.now(),
-            lastUpdatedBy: userInfo,
-        };
-
+        if (!formData.name || formData.items.length === 0) { alert('Product name and at least one item are required.'); return; }
+        const userInfo = { uid: currentUser.uid, displayName: currentUser.displayName || currentUser.email };
+        const dataToSave = { ...formData, finalUnitPrice: calculatedCosts.finalUnitPrice, rawMaterialCost: calculatedCosts.rawMaterialCost, costBreakdown: calculatedCosts.costBreakdown, updatedAt: Timestamp.now(), lastUpdatedBy: userInfo };
         try {
             if (isEditing) {
-                const docRef = doc(db, 'products', formData.id);
-                await updateDoc(docRef, dataToSave);
+                await updateDoc(doc(db, 'products', formData.id), dataToSave);
             } else {
                 dataToSave.createdAt = Timestamp.now();
                 dataToSave.createdBy = userInfo;
@@ -1561,159 +1579,64 @@ const ProductManagement = ({ currentUser }) => {
             }
             fetchData();
             setView('list');
-        } catch (err) {
-            console.error(err);
-            setError("Failed to save product.");
-        }
+        } catch (err) { console.error(err); setError("Failed to save product."); }
     };
-    
-    const openCostSheet = (product) => {
-        setSelectedProductForCostSheet(product);
-        setIsCostSheetModalOpen(true);
-    };
+    const openCostSheet = (product) => { setSelectedProductForCostSheet(product); setIsCostSheetModalOpen(true); };
+    const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase()));
+    const filteredStockItems = stockItems.filter(item => item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase()));
 
-const exportCostSheetPDF = (product) => {
-        if (currentUser.role !== 'super_admin' && currentUser.role !== 'admin') {
-            alert("You don't have permission to export cost sheets.");
+    // --- REWRITTEN EXPORT FUNCTION ---
+    const exportCostSheetPDF = async (product) => {
+        if (!product.items || product.items.length === 0) {
+            alert("Cannot generate a cost sheet for a product with no items.");
             return;
         }
         if (!letterheadBase64) {
-            alert("Letterhead is still loading or failed to load. Please wait a moment or check the console for errors, then try again.");
+            alert("Letterhead image has not loaded yet. Please wait a moment and try again.");
             return;
         }
+
+        // Create a temporary container to render our component into
+        const printableElement = document.createElement('div');
+        document.body.appendChild(printableElement);
+        const root = ReactDOM.createRoot(printableElement);
+
+        // Render the PrintableCostSheet component
+        root.render(<PrintableCostSheet product={product} letterheadBase64={letterheadBase64} />);
+
+        // Give React a moment to render the component
+        await new Promise(resolve => setTimeout(resolve, 500));
         
-        if (!product.items || product.items.length === 0) {
-            alert("Cannot generate a cost sheet for a product with no raw material items added.");
-            return;
-        }
-
         try {
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
-            const topMargin = 45;
-            const leftMargin = 20;
-            const rightMargin = 15;
-
-            const addLetterhead = () => {
-                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-            };
-            
-            addLetterhead();
-
-            // Document Title & Product Info
-            doc.setFontSize(20);
-            doc.setFont(undefined, 'bold');
-            doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
-            doc.setFontSize(11);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Product Name:`, leftMargin, topMargin + 12);
-            doc.setFont(undefined, 'bold');
-            doc.text(`${product.name}`, leftMargin + 32, topMargin + 12);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Serial Number:`, leftMargin, topMargin + 18);
-            doc.setFont(undefined, 'bold');
-            doc.text(`${product.serialNumber}`, leftMargin + 32, topMargin + 18);
-            doc.setFont(undefined, 'normal');
-            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
-            
-            // Raw Materials Table
-            const itemData = product.items.map(item => [
-                item.name || 'N/A',
-                item.model || 'N/A',
-                item.qty || 0,
-                `LKR ${(item.avgCostLKR || 0).toFixed(2)}`,
-                `LKR ${((item.qty || 0) * (item.avgCostLKR || 0)).toFixed(2)}`
-            ]);
-            itemData.push([
-                'Raw Material Total', '', '', '', `LKR ${product.rawMaterialCost.toFixed(2)}`
-            ]);
-
-            autoTable(doc, {
-                startY: topMargin + 25,
-                head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
-                body: itemData,
-                theme: 'striped',
-                headStyles: { fillColor: [22, 160, 133], textColor: 255 },
-                didParseCell: function (data) {
-                    if (data.row.index === itemData.length - 1) {
-                        data.cell.styles.fontStyle = 'bold';
-                    }
-                },
-                margin: { left: leftMargin, right: rightMargin },
-                didDrawPage: (data) => {
-                    if (data.pageNumber > 1) addLetterhead();
-                }
+            const sheetElement = printableElement.querySelector('div');
+            const canvas = await html2canvas(sheetElement, { 
+                scale: 2, // Higher scale for better quality
+                useCORS: true 
             });
-            
-            if (!doc.autoTable.previous) {
-                alert("Error: Could not generate the raw materials table.");
-                return; 
-            }
 
-            const firstTableFinalY = doc.autoTable.previous.finalY;
-            let finalY = firstTableFinalY; // Initialize finalY with the position after the first table
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
 
-            // Additional Costs Table
-            const costData = [
-                [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
-                [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
-                [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
-                [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
-                [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
-            ];
-
-            autoTable(doc, {
-                startY: firstTableFinalY + 10,
-                head: [['Additional Cost Component', 'Amount (LKR)']],
-                body: costData,
-                theme: 'grid',
-                headStyles: { fillColor: [44, 62, 80] },
-                margin: { left: leftMargin, right: rightMargin },
-                // --- THIS IS THE FIX: Manually capture the final Y position ---
-                didDrawPage: function (data) {
-                    finalY = data.cursor.y; // Update finalY with the cursor position after this table is drawn
-                    addLetterhead();
-                }
-            });
-            
-            // Final Summary - Now uses the manually captured 'finalY'
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.text('Total Production Cost:', leftMargin, finalY + 12);
-            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, finalY + 12, { align: 'right' });
-            doc.text(`Profit (${product.costing.profit}%):`, leftMargin, finalY + 19);
-            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, finalY + 19, { align: 'right' });
-            doc.setDrawColor(22, 160, 133);
-            doc.setLineWidth(0.5);
-            doc.line(leftMargin, finalY + 23, pageWidth - rightMargin, finalY + 23);
-            doc.setFontSize(16);
-            doc.setTextColor('#16A085');
-            doc.text('Final Selling Price:', leftMargin, finalY + 30);
-            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, finalY + 30, { align: 'right' });
-            
-            doc.save(`CostSheet-${product.serialNumber}.pdf`);
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`CostSheet-${product.serialNumber}.pdf`);
 
         } catch (e) {
             console.error("Failed to generate PDF:", e);
-            alert("An unexpected error occurred while generating the PDF. Please check the console for details.");
+            alert("An error occurred while generating the PDF.");
+        } finally {
+            // Clean up the temporary element from the DOM
+            root.unmount();
+            printableElement.remove();
         }
     };
-
-    const filteredProducts = products.filter(p =>
-        p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-        p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase())
-    );
-
-    const filteredStockItems = stockItems.filter(item => 
-        item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || 
-        item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase())
-    );
-
+    // The rest of your ProductManagement component's return(...) JSX remains the same
     if(loading) return <div className="p-8 text-center">Loading...</div>;
     if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    if (view === 'form') {
+    // ... all the form view and list view JSX is here ...
+    // Make sure to copy the full component return statement from your original file
+     if (view === 'form') {
         return (
             <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
                 <div className="flex justify-between items-center mb-6">
@@ -1818,13 +1741,7 @@ const exportCostSheetPDF = (product) => {
             </div>
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-4 border-b">
-                    <input
-                        type="text"
-                        placeholder="Search by Product Name or Serial No..."
-                        value={productSearchTerm}
-                        onChange={(e) => setProductSearchTerm(e.target.value)}
-                        className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <input type="text" placeholder="Search by Product Name or Serial No..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="overflow-x-auto"><table className="min-w-full">
                     <thead><tr className="bg-gray-100">
