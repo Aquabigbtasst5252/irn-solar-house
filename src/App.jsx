@@ -1901,23 +1901,24 @@ const ImportDashboard = () => {
 };
 
 const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
+    // ... (keep all the existing useState hooks from the previous version)
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
-    const [finishedProducts, setFinishedProducts] = useState([]); // For products from Product Management
+    const [finishedProducts, setFinishedProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    
-    // Form State
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [quotationItems, setQuotationItems] = useState([]);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-    
-    // State for the new product selection logic
-    const [productType, setProductType] = useState('stock'); // 'stock' or 'finished'
+    const [productType, setProductType] = useState('stock');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedProductQty, setSelectedProductQty] = useState(1);
+    
+    // New state for the serial number modal
+    const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
+    const [productForSerialSelection, setProductForSerialSelection] = useState(null);
 
-    // Fetch initial data for customers and all product types
+    // ... (keep the fetchPrerequisites, useEffect, and handleCustomerAdded functions as they are)
     const fetchPrerequisites = useCallback(async () => {
         setLoading(true);
         try {
@@ -1926,22 +1927,14 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                 getDocs(collection(db, "import_stock")),
                 getDocs(collection(db, "products"))
             ]);
-            
             setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            
-        } catch (err) {
-            console.error(err);
-            setError("Failed to load required data. Please try again.");
-        } finally {
-            setLoading(false);
-        }
+        } catch (err) { console.error(err); setError("Failed to load required data."); }
+        finally { setLoading(false); }
     }, []);
 
-    useEffect(() => {
-        fetchPrerequisites();
-    }, [fetchPrerequisites]);
+    useEffect(() => { fetchPrerequisites(); }, [fetchPrerequisites]);
     
     const handleCustomerAdded = (newCustomer) => {
         setCustomers(prev => [...prev, newCustomer]);
@@ -1949,57 +1942,91 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
         setIsCustomerModalOpen(false);
     };
 
-    // Add selected item to the quotation list
     const handleAddItemToQuotation = () => {
         if (!selectedProductId || selectedProductQty <= 0) {
             alert("Please select a product and enter a valid quantity.");
             return;
         }
 
-        const sourceList = productType === 'stock' ? stockItems : finishedProducts;
-        const productToAdd = sourceList.find(p => p.id === selectedProductId);
-
-        if (productToAdd) {
-            const newItem = {
-                id: productToAdd.id,
-                name: productToAdd.name,
-                model: productToAdd.model || '',
-                qty: Number(selectedProductQty),
-                unitPrice: productType === 'stock' ? (productToAdd.sellingPriceLKR || 0) : (productToAdd.finalUnitPrice || 0),
-                type: productType
-            };
-
-            setQuotationItems(prev => [...prev, newItem]);
-            // Reset selection
-            setSelectedProductId('');
-            setSelectedProductQty(1);
+        if (productType === 'stock') {
+            const product = stockItems.find(p => p.id === selectedProductId);
+            setProductForSerialSelection(product);
+            setIsSerialModalOpen(true);
+        } else { // Finished Product
+            const productToAdd = finishedProducts.find(p => p.id === selectedProductId);
+            if (productToAdd) {
+                const newItem = {
+                    id: productToAdd.id,
+                    name: productToAdd.name,
+                    model: productToAdd.model || '',
+                    qty: Number(selectedProductQty),
+                    unitPrice: productToAdd.finalUnitPrice || 0,
+                    totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty),
+                    type: 'finished',
+                    serials: [] // Finished products don't have serials in this context
+                };
+                setQuotationItems(prev => [...prev, newItem]);
+                setSelectedProductId('');
+                setSelectedProductQty(1);
+            }
         }
     };
     
+    // This function is called when the user confirms their selection in the modal
+    const handleSerialSelectionConfirm = (selectedSerials) => {
+        const product = productForSerialSelection;
+        const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0);
+
+        const newItem = {
+            id: product.id,
+            name: product.name,
+            model: product.model || '',
+            qty: selectedSerials.length,
+            unitPrice: totalCost / selectedSerials.length, // Average price of selected units
+            totalPrice: totalCost,
+            type: 'stock',
+            serials: selectedSerials.map(s => s.id) // Store the IDs of the selected serials
+        };
+
+        setQuotationItems(prev => [...prev, newItem]);
+        
+        // Reset and close modal
+        setIsSerialModalOpen(false);
+        setProductForSerialSelection(null);
+        setSelectedProductId('');
+        setSelectedProductQty(1);
+    };
+
     const handleRemoveItem = (index) => {
         setQuotationItems(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Memoize product list to avoid re-calculating on every render
     const availableProducts = useMemo(() => {
         return productType === 'stock' ? stockItems : finishedProducts;
     }, [productType, stockItems, finishedProducts]);
 
     if (loading) return <div className="p-8 text-center">Loading...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
+    // ... (keep the rest of the return statement, the JSX, from the previous version)
     return (
         <div className="p-4 sm:p-8 space-y-6">
             <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl">
                 <CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} />
             </Modal>
+            
+            <SerialSelectorModal 
+                isOpen={isSerialModalOpen}
+                onClose={() => setIsSerialModalOpen(false)}
+                product={productForSerialSelection}
+                quantity={selectedProductQty}
+                onConfirm={handleSerialSelectionConfirm}
+            />
 
             <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
             
-            {/* Step 1: Customer Selection */}
+            {/* Step 1: Customer Selection (JSX is unchanged) */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label>
                         <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
@@ -2011,7 +2038,7 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                 </div>
             </div>
 
-            {/* Step 2: Product Selection */}
+            {/* Step 2: Product Selection (JSX is unchanged) */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
                  <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products to Quotation</h3>
                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
@@ -2037,13 +2064,13 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                  </div>
             </div>
             
-             {/* Step 3: Review Items */}
+             {/* Step 3: Review Items (JSX is slightly changed to show total price) */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Quotation Items</h3>
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead className="bg-gray-100"><tr>
-                            <th className="px-4 py-2 text-left">Product Name</th>
+                            <th className="px-4 py-2 text-left">Product Name & Serials</th>
                             <th className="px-4 py-2 text-right">Quantity</th>
                             <th className="px-4 py-2 text-right">Unit Price (LKR)</th>
                             <th className="px-4 py-2 text-right">Total (LKR)</th>
@@ -2055,10 +2082,13 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                             ) : (
                                 quotationItems.map((item, index) => (
                                     <tr key={index} className="border-b">
-                                        <td className="px-4 py-2">{item.name}</td>
+                                        <td className="px-4 py-2">
+                                            <p className="font-semibold">{item.name}</p>
+                                            {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>}
+                                        </td>
                                         <td className="px-4 py-2 text-right">{item.qty}</td>
                                         <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td>
-                                        <td className="px-4 py-2 text-right font-semibold">{(item.qty * item.unitPrice).toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td>
                                         <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td>
                                     </tr>
                                 ))
@@ -2067,7 +2097,6 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                     </table>
                 </div>
             </div>
-
         </div>
     );
 };
@@ -2171,6 +2200,93 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                 </table>
             </div>
         </div>
+    );
+};
+
+const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) => {
+    const [serials, setSerials] = useState([]);
+    const [selectedSerials, setSelectedSerials] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (isOpen && product) {
+            const fetchSerials = async () => {
+                setLoading(true);
+                setSelectedSerials([]);
+                try {
+                    const serialsColRef = collection(db, 'import_stock', product.id, 'serials');
+                    // Fetch serials that are not assigned to a shop yet
+                    const q = query(serialsColRef, where("assignedShopId", "==", ""));
+                    const querySnapshot = await getDocs(q);
+                    
+                    const serialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Sort by purchase date for FIFO
+                    serialsList.sort((a, b) => a.purchaseDate.toMillis() - b.purchaseDate.toMillis());
+
+                    setSerials(serialsList);
+                } catch (err) {
+                    console.error("Failed to fetch serial numbers:", err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchSerials();
+        }
+    }, [isOpen, product]);
+
+    const handleCheckboxChange = (serial) => {
+        setSelectedSerials(prev => {
+            if (prev.some(s => s.id === serial.id)) {
+                return prev.filter(s => s.id !== serial.id);
+            } else {
+                if (prev.length < quantity) {
+                    return [...prev, serial];
+                }
+            }
+            return prev;
+        });
+    };
+    
+    const isSelectionComplete = selectedSerials.length === Number(quantity);
+
+    if (!isOpen) return null;
+    
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="2xl">
+            <h3 className="text-xl font-bold mb-4">Select Serial Numbers for {product.name}</h3>
+            <p className="mb-4 text-gray-600">Please select exactly <strong>{quantity}</strong> item(s). Showing oldest stock first (FIFO).</p>
+            {loading ? <p>Loading serials...</p> : (
+                <div className="max-h-96 overflow-y-auto border rounded-md p-2">
+                    {serials.length > 0 ? serials.map(serial => (
+                        <div key={serial.id} className="flex items-center p-2 hover:bg-gray-100 rounded-md">
+                            <input
+                                type="checkbox"
+                                id={serial.id}
+                                checked={selectedSerials.some(s => s.id === serial.id)}
+                                onChange={() => handleCheckboxChange(serial)}
+                                disabled={selectedSerials.length >= quantity && !selectedSerials.some(s => s.id === serial.id)}
+                                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor={serial.id} className="ml-3 flex-grow grid grid-cols-3">
+                                <span className="font-mono text-sm">{serial.id}</span>
+                                <span className="text-sm text-gray-700">Cost: LKR {serial.finalCostLKR.toFixed(2)}</span>
+                                <span className="text-xs text-gray-500">Purchased: {serial.purchaseDate.toDate().toLocaleDateString()}</span>
+                            </label>
+                        </div>
+                    )) : <p>No available serial numbers found in warehouse for this item.</p>}
+                </div>
+            )}
+            <div className="mt-6 flex justify-between items-center">
+                <p className="text-sm font-semibold">{selectedSerials.length} / {quantity} selected</p>
+                <button 
+                    onClick={() => onConfirm(selectedSerials)} 
+                    disabled={!isSelectionComplete}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                    Confirm Selection
+                </button>
+            </div>
+        </Modal>
     );
 };
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
