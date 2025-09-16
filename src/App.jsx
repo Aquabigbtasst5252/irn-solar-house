@@ -58,7 +58,7 @@ const getUserProfile = async (uid) => {
   const userDocSnap = await getDoc(userDocRef);
   return userDocSnap.exists() ? userDocSnap.data() : null;
 };
-const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
+const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-issau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
 const ShieldCheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286zm0 13.036h.008v.008h-.008v-.008z" /></svg>;
@@ -2086,6 +2086,22 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     // --- GENERAL CONTENT FUNCTIONS ---
     const handleContentInputChange = (e) => setContent(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
+    const handleShowroomChange = (index, e) => {
+        const updatedShowrooms = [...(content.showrooms || [])];
+        updatedShowrooms[index] = { ...updatedShowrooms[index], [e.target.name]: e.target.value };
+        setContent(prev => ({ ...prev, showrooms: updatedShowrooms }));
+    };
+
+    const addShowroom = () => {
+        const newShowrooms = [...(content.showrooms || []), { name: '', address: '', mapUrl: '' }];
+        setContent(prev => ({ ...prev, showrooms: newShowrooms }));
+    };
+
+    const removeShowroom = (index) => {
+        const updatedShowrooms = content.showrooms.filter((_, i) => i !== index);
+        setContent(prev => ({ ...prev, showrooms: updatedShowrooms }));
+    };
+
     const handleSaveGeneralContent = async () => {
         setSaving(true);
         try {
@@ -2280,12 +2296,28 @@ const WebsiteManagementPortal = ({ currentUser }) => {
                             </div>
                         </div>
                     </fieldset>
-                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Contact Details</legend>
+                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Contact & Location</legend>
                         <div className="space-y-4">
                             <div><label className="block text-sm font-medium">Hotline Number</label><input type="text" name="contactHotline" value={content?.contactHotline || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                             <div><label className="block text-sm font-medium">Email Address</label><input type="email" name="contactEmail" value={content?.contactEmail || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                             <div><label className="block text-sm font-medium">Physical Address</label><textarea name="contactAddress" value={content?.contactAddress || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                            <div><label className="block text-sm font-medium">Google Maps Embed URL</label><input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" placeholder="Paste the src URL from Google Maps"/></div>
                         </div>
+                    </fieldset>
+                    
+                    <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">Showrooms / Branch Locations</legend>
+                        <div className="space-y-3">
+                            {(content?.showrooms || []).map((showroom, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-7 gap-3 p-3 bg-gray-50 rounded-md relative">
+                                    <input type="text" name="name" placeholder="Branch Name" value={showroom.name || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="text" name="address" placeholder="Full Address" value={showroom.address || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="text" name="mapUrl" placeholder="Google Maps URL" value={showroom.mapUrl || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-3"/>
+                                    <button type="button" onClick={() => removeShowroom(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addShowroom} className="mt-3 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Add Showroom</button>
                     </fieldset>
 
                     <div className="flex justify-end">
@@ -2450,9 +2482,13 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
         contactHotline: "+94 77 750 1836",
         contactEmail: "easytime1@gmail.com",
         contactAddress: "No.199/8, Ranawiru Helasiri Mawatha, Boragodawatta, Minuwangoda, Sri Lanka.",
+        mapEmbedURL: ""
     };
 
     const pageContent = content || defaultContent;
+    const googleMapsEmbedCode = pageContent.mapEmbedURL 
+        ? `<iframe src="${pageContent.mapEmbedURL}" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`
+        : '<p class="text-center p-8 bg-gray-100">Map not available. Please configure the map URL in the admin panel.</p>';
 
     return (
         <div className="bg-white text-gray-800 font-sans">
@@ -2465,6 +2501,7 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                     <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
                         <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
+                        <a href="#showrooms" className="hover:text-yellow-600 transition-colors">Showrooms</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
                     </div>
                     <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
@@ -2508,6 +2545,33 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                     </div>
                 </div>
             </section>
+
+            <section id="location" className="bg-white pt-16 sm:pt-24">
+                <div className="container mx-auto px-6">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Main Showroom</h2>
+                </div>
+                <div className="w-screen relative left-1/2 -translate-x-1/2" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
+            </section>
+
+            {pageContent.showrooms && pageContent.showrooms.length > 0 && (
+                <section id="showrooms" className="py-16 sm:py-24 bg-gray-50">
+                    <div className="container mx-auto px-6">
+                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Other Branches</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {pageContent.showrooms.map((showroom, index) => (
+                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg text-center">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-2">{showroom.name}</h3>
+                                    <p className="text-gray-600 mb-4 h-16">{showroom.address}</p>
+                                    <a href={showroom.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 transition-colors">
+                                        <MapPinIcon />
+                                        <span className="ml-2">View on Map</span>
+                                    </a>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
 
             <section id="contact" className="py-20 bg-gray-800 text-white">
                 <div className="container mx-auto px-6">
