@@ -1355,8 +1355,9 @@ const ImportManagementPortal = ({ currentUser, importToView, onClearImportToView
         </div>
     );
 };
+
 // ====================================================================================
-// --- PRODUCT MANAGEMENT COMPONENT ---
+// --- REVISED PRODUCT MANAGEMENT COMPONENT ---
 // ====================================================================================
 const ProductManagement = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list', 'form'
@@ -1366,23 +1367,32 @@ const ProductManagement = ({ currentUser }) => {
     const [error, setError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [stockSearchTerm, setStockSearchTerm] = useState('');
-    const [productSearchTerm, setProductSearchTerm] = useState(''); // State for the new search bar
+    const [productSearchTerm, setProductSearchTerm] = useState(''); 
     const [isCostSheetModalOpen, setIsCostSheetModalOpen] = useState(false);
     const [selectedProductForCostSheet, setSelectedProductForCostSheet] = useState(null);
     const [letterheadBase64, setLetterheadBase64] = useState('');
 
+    // Pre-load the letterhead image on component mount
     useEffect(() => {
         const fetchLetterhead = async () => {
             try {
-                const response = await fetch('/IRN Solar House.png'); // Fetches from public folder
+                const response = await fetch('/IRN Solar House.png'); // Fetches from the public folder
+                if (!response.ok) {
+                    throw new Error(`Letterhead image not found at /IRN Solar House.png (status: ${response.status})`);
+                }
                 const blob = await response.blob();
                 const reader = new FileReader();
                 reader.onloadend = () => {
-                    setLetterheadBase64(reader.result);
+                    setLetterheadBase64(reader.result); // This will be a base64 string
+                };
+                reader.onerror = () => {
+                    console.error("Failed to read the letterhead image blob.");
+                    setError("Failed to process letterhead image.");
                 };
                 reader.readAsDataURL(blob);
-            } catch (error) {
-                console.error("Failed to load letterhead image:", error);
+            } catch (err) {
+                console.error("Failed to load letterhead image:", err);
+                setError("Could not load the company letterhead. Please ensure 'IRN Solar House.png' is in the public folder.");
             }
         };
         fetchLetterhead();
@@ -1562,102 +1572,123 @@ const ProductManagement = ({ currentUser }) => {
         setIsCostSheetModalOpen(true);
     };
 
-    const exportCostSheetPDF = async (product) => {
-        if (!['super_admin', 'admin'].includes(currentUser.role)) {
+    const exportCostSheetPDF = (product) => {
+        if (currentUser.role !== 'super_admin' && currentUser.role !== 'admin') {
             alert("You don't have permission to export cost sheets.");
             return;
         }
         if (!letterheadBase64) {
-            alert("Letterhead image is not loaded yet. Please wait and try again.");
+            alert("Letterhead is still loading or failed to load. Please wait a moment or check the console for errors, then try again.");
             return;
         }
 
-        try {
-            const doc = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = doc.internal.pageSize.getWidth();
-            const pageHeight = doc.internal.pageSize.getHeight();
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const topMargin = 45;
+        const leftMargin = 20;
+        const rightMargin = 15;
+        const contentWidth = pageWidth - leftMargin - rightMargin;
 
-            const topMargin = 45;
-            const leftMargin = 20;
-            const rightMargin = 15;
+        const addLetterhead = () => {
+            doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
+        };
+        
+        addLetterhead();
 
-            const addLetterhead = () => {
-                doc.addImage(letterheadBase64, 'PNG', 0, 0, pageWidth, pageHeight);
-            };
+        // --- Document Title ---
+        doc.setFontSize(20);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor('#333333');
+        doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
 
-            addLetterhead();
+        // --- Product Info ---
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor('#555555');
+        doc.text(`Product Name:`, leftMargin, topMargin + 12);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${product.name}`, leftMargin + 32, topMargin + 12);
 
-            doc.setFontSize(18);
-            doc.text('Cost Sheet', pageWidth / 2, topMargin, { align: 'center' });
-            
-            doc.setFontSize(11);
-            doc.setTextColor(100);
-            doc.text(`Product: ${product.name}`, leftMargin, topMargin + 10);
-            doc.text(`Serial Number: ${product.serialNumber}`, leftMargin, topMargin + 15);
-            doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 15, { align: 'right' });
+        doc.setFont(undefined, 'normal');
+        doc.text(`Serial Number:`, leftMargin, topMargin + 18);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${product.serialNumber}`, leftMargin + 32, topMargin + 18);
+        
+        doc.setFont(undefined, 'normal');
+        doc.text(`Date Exported: ${new Date().toLocaleDateString()}`, pageWidth - rightMargin, topMargin + 18, { align: 'right' });
+        
+        // --- Raw Materials Table ---
+        const itemData = product.items.map(item => [
+            item.name,
+            item.model,
+            item.qty,
+            `LKR ${item.avgCostLKR.toFixed(2)}`,
+            `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}`
+        ]);
+        itemData.push([
+            { content: 'Raw Material Total', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: `LKR ${product.rawMaterialCost.toFixed(2)}`, styles: { fontStyle: 'bold' } }
+        ]);
 
-
-            const itemData = product.items.map(item => [ item.name, item.model, item.qty, `LKR ${item.avgCostLKR.toFixed(2)}`, `LKR ${(item.qty * item.avgCostLKR).toFixed(2)}` ]);
-            
-            autoTable(doc, { 
-                startY: topMargin + 25,
-                head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
-                body: itemData,
-                theme: 'striped',
-                headStyles: { fillColor: [22, 160, 133] },
-                margin: { left: leftMargin, right: rightMargin },
-                didDrawPage: (data) => {
-                    if (data.pageNumber > 1) {
-                        addLetterhead();
-                    }
-                }
-            });
-
-            const costData = [
-                ['Raw Material Cost', `LKR ${product.costBreakdown.rawMaterialCost.toFixed(2)}`],
-                [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
-                [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
-                [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
-                [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
-                [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
-            ];
-
-            autoTable(doc, {
-                 startY: doc.autoTable.previous.finalY + 8,
-                 head: [['Cost Component', 'Amount']],
-                 body: costData,
-                 theme: 'grid',
-                 margin: { left: leftMargin, right: rightMargin },
-                 didDrawPage: (data) => {
+        autoTable(doc, {
+            startY: topMargin + 25,
+            head: [['Item Name', 'Model', 'Qty', 'Unit Cost', 'Total Cost']],
+            body: itemData,
+            theme: 'striped',
+            headStyles: { fillColor: [22, 160, 133], textColor: 255 },
+            margin: { left: leftMargin, right: rightMargin },
+            didDrawPage: (data) => {
+                if (data.pageNumber > 1) { // Only add letterhead on new pages
                     addLetterhead();
-                 }
-            });
+                }
+            }
+        });
 
-            const secondFinalY = doc.autoTable.previous.finalY;
-            doc.setFontSize(12);
-            doc.setFont(undefined, 'bold');
-            doc.text('Total Production Cost:', leftMargin, secondFinalY + 10);
-            doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 10, { align: 'right' });
-            
-            doc.text(`Profit (${product.costing.profit}%):`, leftMargin, secondFinalY + 17);
-            doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 17, { align: 'right' });
-            
-            doc.setDrawColor(0);
-            doc.line(leftMargin, secondFinalY + 20, pageWidth - rightMargin, secondFinalY + 20);
+        // --- Additional Costs Table ---
+        const costData = [
+            [`Employee Salary (${product.costing.employeeSalary}%)`, `LKR ${product.costBreakdown.employeeSalary.toFixed(2)}`],
+            [`Delivery/Transport (${product.costing.delivery}%)`, `LKR ${product.costBreakdown.delivery.toFixed(2)}`],
+            [`Commission (${product.costing.commission}%)`, `LKR ${product.costBreakdown.commission.toFixed(2)}`],
+            [`Service Charge (${product.costing.serviceCharge}%)`, `LKR ${product.costBreakdown.serviceCharge.toFixed(2)}`],
+            [`Rent (${product.costing.rent}%)`, `LKR ${product.costBreakdown.rent.toFixed(2)}`],
+        ];
 
-            doc.setFontSize(14);
-            doc.text('Final Selling Price:', leftMargin, secondFinalY + 27);
-            doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, secondFinalY + 27, { align: 'right' });
-            
-            doc.save(`cost-sheet-${product.serialNumber}.pdf`);
+        autoTable(doc, {
+            startY: doc.autoTable.previous.finalY + 10,
+            head: [['Additional Cost Component', 'Amount (LKR)']],
+            body: costData,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80] },
+            margin: { left: leftMargin, right: rightMargin },
+            didDrawPage: (data) => addLetterhead()
+        });
+        
+        const finalY = doc.autoTable.previous.finalY;
 
-        } catch (err) {
-            console.error("PDF Export failed with error:", err);
-            setError("Could not generate PDF. Please check the console for errors.");
-        }
+        // --- Final Summary ---
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.setTextColor('#333333');
+
+        doc.text('Total Production Cost:', leftMargin, finalY + 12);
+        doc.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, pageWidth - rightMargin, finalY + 12, { align: 'right' });
+        
+        doc.text(`Profit (${product.costing.profit}%):`, leftMargin, finalY + 19);
+        doc.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, pageWidth - rightMargin, finalY + 19, { align: 'right' });
+
+        doc.setDrawColor(22, 160, 133);
+        doc.setLineWidth(0.5);
+        doc.line(leftMargin, finalY + 23, pageWidth - rightMargin, finalY + 23);
+        
+        doc.setFontSize(16);
+        doc.setTextColor('#16A085');
+        doc.text('Final Selling Price:', leftMargin, finalY + 30);
+        doc.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, pageWidth - rightMargin, finalY + 30, { align: 'right' });
+        
+        doc.save(`CostSheet-${product.serialNumber}.pdf`);
     };
-    
-    // Filter products based on the search term
+
     const filteredProducts = products.filter(p =>
         p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
         p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase())
@@ -1817,7 +1848,6 @@ const ProductManagement = ({ currentUser }) => {
         </div>
     );
 };
-
 
 const ImportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Solar Import Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for invoicing and costing for the solar import business will be built here.</p></div>;
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
