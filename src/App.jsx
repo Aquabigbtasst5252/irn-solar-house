@@ -2439,13 +2439,13 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            <section id="location" className="bg-white">
-                {/* This container now handles the top padding and centers the title */}
-                <div className="container mx-auto px-6 pt-16 sm:pt-24">
+            <section id="location" className="bg-white pt-16 sm:pt-24">
+                {/* This container still centers the title */}
+                <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showroom</h2>
                 </div>
-                {/* This div is now in a full-width container with no side padding */}
-                <div className="w-full" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
+                {/* These new classes force the map to be full-width */}
+                <div className="w-screen relative left-1/2 -translate-x-1/2" dangerouslySetInnerHTML={{ __html: googleMapsEmbedCode }} />
             </section>
 
             {pageContent.showrooms && pageContent.showrooms.length > 0 && (
