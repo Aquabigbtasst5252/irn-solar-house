@@ -1900,6 +1900,121 @@ const ImportDashboard = () => {
     );
 };
 
+    // Form View
+    if (view === 'form') {
+        // You can reuse the form JSX from the previous component here.
+        // For brevity, I'll put a placeholder. You should paste your form here.
+        return (
+             <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? 'Edit Quotation' : 'Create New Quotation'}</h2>
+                    <div>
+                         <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
+                         <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isSaving ? 'Saving...' : 'Save Quotation'}</button>
+                    </div>
+                </div>
+                {/* --- PASTE YOUR MULTI-STEP FORM JSX HERE --- */}
+                {/* For example: */}
+                <div className="space-y-6">
+                   <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
+                      <h3 className="text-xl font-semibold mb-4 border-b pb-2">Step 1: Select Customer</h3>
+                      {/* Customer selection logic */}
+                   </div>
+                   <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
+                      <h3 className="text-xl font-semibold mb-4 border-b pb-2">Step 2: Add Products</h3>
+                      {/* Product addition logic */}
+                   </div>
+                   {/* etc. */}
+                </div>
+             </div>
+        );
+    }
+};
+
+// Add this helper function outside of your components, near the top of the file.
+const generatePdf = (docData, type, letterheadBase64, customer) => {
+    const doc = new jsPDF();
+    
+    // Add letterhead background
+    if (letterheadBase64) {
+        const imgWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+    }
+
+    // Header
+    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 45, { align: 'center' });
+
+    // Document Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref No: ${docData.id}`, 20, 60);
+    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+
+    // Customer Info
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill To:', 20, 75);
+    doc.setFont('helvetica', 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    doc.text(customerAddress, 20, 80);
+
+    // Table
+    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
+    const tableRows = [];
+    docData.items.forEach((item, index) => {
+        const itemData = [
+            index + 1,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            item.qty,
+            item.unitPrice.toFixed(2),
+            item.totalPrice.toFixed(2)
+        ];
+        tableRows.push(itemData);
+    });
+
+    autoTable(doc, {
+        startY: 110,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
+        didDrawCell: (data) => {
+            // For multi-line item descriptions
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                doc.setFontSize(8);
+            }
+        }
+    });
+
+    // Totals
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subtotal:`, 140, finalY + 15);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
+    doc.text(`Grand Total:`, 140, finalY + 22);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
+    
+    // Warranty Info
+    if (docData.warrantyPeriod) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Warranty Information:', 20, finalY + 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
+        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
+    }
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
+    
+    doc.save(`${title}-${docData.id}.pdf`);
+};
+
 const QuotationManagement = ({ currentUser }) => {
     // --- State Management ---
     const [view, setView] = useState('list'); // 'list' or 'form'
@@ -2101,192 +2216,6 @@ const QuotationManagement = ({ currentUser }) => {
              </div>
         );
     }
-};
-
-// Add this helper function outside of your components, near the top of the file.
-const generatePdf = (docData, type, letterheadBase64, customer) => {
-    const doc = new jsPDF();
-    
-    // Add letterhead background
-    if (letterheadBase64) {
-        const imgWidth = doc.internal.pageSize.getWidth();
-        const imgHeight = doc.internal.pageSize.getHeight();
-        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
-    }
-
-    // Header
-    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 105, 45, { align: 'center' });
-
-    // Document Info
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Ref No: ${docData.id}`, 20, 60);
-    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
-
-    // Customer Info
-    doc.setFont('helvetica', 'bold');
-    doc.text('Bill To:', 20, 75);
-    doc.setFont('helvetica', 'normal');
-    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
-    doc.text(customerAddress, 20, 80);
-
-    // Table
-    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
-    const tableRows = [];
-    docData.items.forEach((item, index) => {
-        const itemData = [
-            index + 1,
-            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
-            item.qty,
-            item.unitPrice.toFixed(2),
-            item.totalPrice.toFixed(2)
-        ];
-        tableRows.push(itemData);
-    });
-
-    autoTable(doc, {
-        startY: 110,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
-        didDrawCell: (data) => {
-            // For multi-line item descriptions
-            if (data.column.index === 1 && data.cell.section === 'body') {
-                doc.setFontSize(8);
-            }
-        }
-    });
-
-    // Totals
-    const finalY = doc.lastAutoTable.finalY;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Subtotal:`, 140, finalY + 15);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
-    doc.text(`Grand Total:`, 140, finalY + 22);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
-    
-    // Warranty Info
-    if (docData.warrantyPeriod) {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Warranty Information:', 20, finalY + 40);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
-        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
-    }
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
-    
-    doc.save(`${title}-${docData.id}.pdf`);
-};
-
-const QuotationManagement = ({ currentUser, onNavigate }) => { 
-    // This is the main component for quotation/invoice workflow
-    return <QuotationInvoiceFlow currentUser={currentUser} onNavigate={onNavigate} />;
-};
-const InvoiceManagement = ({ currentUser, onNavigate }) => { 
-    // This component will now list invoices
-    const [invoices, setInvoices] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [letterheadBase64, setLetterheadBase64] = useState('');
-
-    useEffect(() => {
-        const fetchLetterhead = async () => {
-            try {
-                const response = await fetch('/IRN Solar House.png');
-                if (!response.ok) throw new Error('Letterhead not found');
-                const blob = await response.blob();
-                const reader = new FileReader();
-                reader.onloadend = () => setLetterheadBase64(reader.result);
-                reader.readAsDataURL(blob);
-            } catch (err) { console.error("Failed to load letterhead image:", err); }
-        };
-        fetchLetterhead();
-    }, []);
-
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [invoicesSnap, customersSnap] = await Promise.all([
-                getDocs(query(collection(db, "invoices"), orderBy("createdAt", "desc"))),
-                getDocs(collection(db, "import_customers"))
-            ]);
-            setInvoices(invoicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        } catch (err) {
-            setError("Failed to fetch invoices.");
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-    
-    const exportToPDF = (invoice) => {
-        if (!letterheadBase64) {
-            alert("Letterhead not loaded. Please try again in a moment.");
-            return;
-        }
-        const customer = customers.find(c => c.id === invoice.customerId);
-        generatePdf(invoice, 'invoice', letterheadBase64, customer);
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading Invoices...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    return (
-        <div className="p-4 sm:p-8">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Invoice Management</h2>
-                <button onClick={() => onNavigate('quotation_management')} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                    <PlusCircleIcon /> Create New
-                </button>
-            </div>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-                <table className="min-w-full">
-                    <thead>
-                        <tr className="bg-gray-100">
-                            <th className="px-5 py-3 text-left">Invoice #</th>
-                            <th className="px-5 py-3 text-left">Customer</th>
-                            <th className="px-5 py-3 text-left">Date</th>
-                            <th className="px-5 py-3 text-left">Total (LKR)</th>
-                            <th className="px-5 py-3 text-left">Warranty End</th>
-                            <th className="px-5 py-3 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {invoices.map(invoice => {
-                             const customer = customers.find(c => c.id === invoice.customerId);
-                             return (
-                                <tr key={invoice.id} className="border-b hover:bg-gray-50">
-                                    <td className="px-5 py-4 font-mono">{invoice.id}</td>
-                                    <td className="px-5 py-4">{customer?.name || 'N/A'}</td>
-                                    <td className="px-5 py-4 text-sm">{invoice.createdAt.toDate().toLocaleDateString()}</td>
-                                    <td className="px-5 py-4 font-semibold">{invoice.total.toFixed(2)}</td>
-                                    <td className="px-5 py-4 text-sm">{invoice.warrantyEndDate || 'N/A'}</td>
-                                    <td className="px-5 py-4 text-center">
-                                        <button onClick={() => exportToPDF(invoice)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon /></button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
 };
 
 const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) => {
