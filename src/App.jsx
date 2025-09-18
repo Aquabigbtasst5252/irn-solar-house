@@ -51,6 +51,90 @@ try {
   storage = getStorage(firebaseApp);
 } catch (error) { console.error("Error initializing Firebase:", error); }
 
+// Add this helper function outside of your components, near the top of the file.
+const generatePdf = (docData, type, letterheadBase64, customer) => {
+    const doc = new jsPDF();
+    
+    // Add letterhead background
+    if (letterheadBase64) {
+        const imgWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+    }
+
+    // Header
+    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 45, { align: 'center' });
+
+    // Document Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref No: ${docData.id}`, 20, 60);
+    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+
+    // Customer Info
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill To:', 20, 75);
+    doc.setFont('helvetica', 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    doc.text(customerAddress, 20, 80);
+
+    // Table
+    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
+    const tableRows = [];
+    docData.items.forEach((item, index) => {
+        const itemData = [
+            index + 1,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            item.qty,
+            item.unitPrice.toFixed(2),
+            item.totalPrice.toFixed(2)
+        ];
+        tableRows.push(itemData);
+    });
+
+    autoTable(doc, {
+        startY: 110,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
+        didDrawCell: (data) => {
+            // For multi-line item descriptions
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                doc.setFontSize(8);
+            }
+        }
+    });
+
+    // Totals
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subtotal:`, 140, finalY + 15);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
+    doc.text(`Grand Total:`, 140, finalY + 22);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
+    
+    // Warranty Info
+    if (docData.warrantyPeriod) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Warranty Information:', 20, finalY + 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
+        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
+    }
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
+    
+    doc.save(`${title}-${docData.id}.pdf`);
+};
+
 // --- Helper Functions & Data ---
 const getUserProfile = async (uid) => {
   if (!db) return null;
@@ -1929,90 +2013,6 @@ const ImportDashboard = () => {
              </div>
         );
     }
-};
-
-// Add this helper function outside of your components, near the top of the file.
-const generatePdf = (docData, type, letterheadBase64, customer) => {
-    const doc = new jsPDF();
-    
-    // Add letterhead background
-    if (letterheadBase64) {
-        const imgWidth = doc.internal.pageSize.getWidth();
-        const imgHeight = doc.internal.pageSize.getHeight();
-        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
-    }
-
-    // Header
-    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 105, 45, { align: 'center' });
-
-    // Document Info
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Ref No: ${docData.id}`, 20, 60);
-    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
-
-    // Customer Info
-    doc.setFont('helvetica', 'bold');
-    doc.text('Bill To:', 20, 75);
-    doc.setFont('helvetica', 'normal');
-    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
-    doc.text(customerAddress, 20, 80);
-
-    // Table
-    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
-    const tableRows = [];
-    docData.items.forEach((item, index) => {
-        const itemData = [
-            index + 1,
-            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
-            item.qty,
-            item.unitPrice.toFixed(2),
-            item.totalPrice.toFixed(2)
-        ];
-        tableRows.push(itemData);
-    });
-
-    autoTable(doc, {
-        startY: 110,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
-        didDrawCell: (data) => {
-            // For multi-line item descriptions
-            if (data.column.index === 1 && data.cell.section === 'body') {
-                doc.setFontSize(8);
-            }
-        }
-    });
-
-    // Totals
-    const finalY = doc.lastAutoTable.finalY;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Subtotal:`, 140, finalY + 15);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
-    doc.text(`Grand Total:`, 140, finalY + 22);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
-    
-    // Warranty Info
-    if (docData.warrantyPeriod) {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Warranty Information:', 20, finalY + 40);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
-        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
-    }
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
-    
-    doc.save(`${title}-${docData.id}.pdf`);
 };
 
 const QuotationManagement = ({ currentUser }) => {
