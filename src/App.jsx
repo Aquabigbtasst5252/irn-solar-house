@@ -51,43 +51,39 @@ try {
   storage = getStorage(firebaseApp);
 } catch (error) { console.error("Error initializing Firebase:", error); }
 
-// Add this helper function outside of your components, near the top of the file.
+// ✅ CORRECT LOCATION: PDF helper function is now at the top level
 const generatePdf = (docData, type, letterheadBase64, customer) => {
     const doc = new jsPDF();
     
-    // Add letterhead background
     if (letterheadBase64) {
         const imgWidth = doc.internal.pageSize.getWidth();
         const imgHeight = doc.internal.pageSize.getHeight();
         doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
     }
 
-    // Header
     const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
     doc.text(title, 105, 45, { align: 'center' });
 
-    // Document Info
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Ref No: ${docData.id}`, 20, 60);
-    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+    const date = docData.createdAt?.seconds ? new Date(docData.createdAt.seconds * 1000) : new Date();
+    doc.text(`Date: ${date.toLocaleDateString()}`, 190, 60, { align: 'right' });
 
-    // Customer Info
     doc.setFont('helvetica', 'bold');
     doc.text('Bill To:', 20, 75);
     doc.setFont('helvetica', 'normal');
     const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
     doc.text(customerAddress, 20, 80);
 
-    // Table
     const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
     const tableRows = [];
     docData.items.forEach((item, index) => {
         const itemData = [
             index + 1,
-            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials && item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
             item.qty,
             item.unitPrice.toFixed(2),
             item.totalPrice.toFixed(2)
@@ -100,16 +96,14 @@ const generatePdf = (docData, type, letterheadBase64, customer) => {
         head: [tableColumn],
         body: tableRows,
         theme: 'striped',
-        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
+        headStyles: { fillColor: [22, 160, 133] },
         didDrawCell: (data) => {
-            // For multi-line item descriptions
             if (data.column.index === 1 && data.cell.section === 'body') {
                 doc.setFontSize(8);
             }
         }
     });
 
-    // Totals
     const finalY = doc.lastAutoTable.finalY;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
@@ -118,7 +112,6 @@ const generatePdf = (docData, type, letterheadBase64, customer) => {
     doc.text(`Grand Total:`, 140, finalY + 22);
     doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
     
-    // Warranty Info
     if (docData.warrantyPeriod) {
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
@@ -128,7 +121,6 @@ const generatePdf = (docData, type, letterheadBase64, customer) => {
         doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
     }
     
-    // Footer
     doc.setFontSize(8);
     doc.text('Thank you for your business!', 105, 270, { align: 'center' });
     
@@ -2016,12 +2008,9 @@ const ImportDashboard = () => {
 };
 
 const QuotationManagement = ({ currentUser }) => {
-    // --- State Management ---
     const [view, setView] = useState('list'); // 'list' or 'form'
     const [isEditing, setIsEditing] = useState(false);
-    const [currentQuotation, setCurrentQuotation] = useState(null); // Holds quotation being edited
-
-    // Data states
+    const [currentQuotation, setCurrentQuotation] = useState(null);
     const [savedQuotations, setSavedQuotations] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
@@ -2029,30 +2018,34 @@ const QuotationManagement = ({ currentUser }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [letterheadBase64, setLetterheadBase64] = useState('');
-
-    // Form-specific states
     const [formItems, setFormItems] = useState([]);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [warrantyPeriod, setWarrantyPeriod] = useState("1 Year");
     const [warrantyEndDate, setWarrantyEndDate] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+    const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
+    const [productType, setProductType] = useState('stock');
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [selectedProductQty, setSelectedProductQty] = useState(1);
+    const [productForSerialSelection, setProductForSerialSelection] = useState(null);
 
-    // --- Data Fetching ---
-    // Real-time listener for quotations
     useEffect(() => {
         const q = query(collection(db, "quotations"), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            setSavedQuotations(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false);
-        }, (err) => {
-            console.error("Listener Error:", err);
-            setError("Failed to load quotations. Please ensure Firestore indexes are created (check browser console for a link).");
-            setLoading(false);
-        });
+        const unsubscribe = onSnapshot(q, 
+            (querySnapshot) => {
+                setSavedQuotations(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setLoading(false);
+            }, 
+            (err) => {
+                console.error("Listener Error:", err);
+                setError("Failed to load quotations. Please ensure Firestore indexes are created (check browser console for a link).");
+                setLoading(false);
+            }
+        );
         return () => unsubscribe();
     }, []);
 
-    // Fetch prerequisites once
     useEffect(() => {
         const fetchPrerequisites = async () => {
             try {
@@ -2062,14 +2055,13 @@ const QuotationManagement = ({ currentUser }) => {
                 setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            } catch (err) { setError(prev => prev + " Failed to load prerequisite data."); }
+            } catch (err) { setError(prev => (prev ? prev + " | " : "") + "Failed to load prerequisite data."); }
         };
         fetchPrerequisites();
         const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Letterhead Error:", err); } };
         fetchLetterhead();
     }, []);
 
-    // --- View Handlers ---
     const handleCreateNew = () => {
         setIsEditing(false);
         setCurrentQuotation(null);
@@ -2092,79 +2084,83 @@ const QuotationManagement = ({ currentUser }) => {
         setView('form');
     };
 
-    // --- Action Handlers ---
     const handleSave = async () => {
-        if (!selectedCustomerId || formItems.length === 0) {
-            alert("Please select a customer and add at least one item.");
-            return;
-        }
+        if (!selectedCustomerId || formItems.length === 0) { alert("Please select a customer and add at least one item."); return; }
         setIsSaving(true);
         const subtotal = formItems.reduce((sum, item) => sum + item.totalPrice, 0);
         const dataToSave = {
-            customerId: selectedCustomerId,
-            items: formItems,
-            total: subtotal,
-            status: currentQuotation?.status || 'draft',
-            warrantyPeriod: warrantyPeriod,
-            warrantyEndDate: warrantyEndDate,
-            lastUpdatedAt: Timestamp.now(),
-            lastUpdatedBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
+            customerId: selectedCustomerId, items: formItems, total: subtotal,
+            status: isEditing ? currentQuotation.status : 'draft',
+            warrantyPeriod: warrantyPeriod, warrantyEndDate: warrantyEndDate,
+            lastUpdatedAt: Timestamp.now(), lastUpdatedBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
         };
-
         try {
             if (isEditing) {
-                const docRef = doc(db, 'quotations', currentQuotation.id);
-                await updateDoc(docRef, dataToSave);
+                await updateDoc(doc(db, 'quotations', currentQuotation.id), dataToSave);
             } else {
                 dataToSave.createdAt = Timestamp.now();
                 dataToSave.createdBy = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email };
                 await addDoc(collection(db, 'quotations'), dataToSave);
             }
-            alert("Quotation saved successfully!");
             setView('list');
-        } catch (err) {
-            console.error("Save Error:", err);
-            setError("Failed to save quotation.");
-        } finally {
-            setIsSaving(false);
-        }
+        } catch (err) { console.error("Save Error:", err); setError("Failed to save quotation."); } 
+        finally { setIsSaving(false); }
     };
-
-    const handleDelete = async (quotationId) => {
-        if (window.confirm("Are you sure?")) {
+    
+    const handleDelete = async (quotationId) => { if (window.confirm("Are you sure?")) { try { await deleteDoc(doc(db, 'quotations', quotationId)); } catch (err) { setError("Failed to delete quotation."); } } };
+    
+    const handleConvertToInvoice = async (quotation) => {
+        if (window.confirm(`This will convert Quotation ${quotation.id} to an invoice and deduct stock. Proceed?`)) {
+            setIsSaving(true);
             try {
-                await deleteDoc(doc(db, 'quotations', quotationId));
-            } catch (err) { setError("Failed to delete quotation."); }
+                const newInvoiceRef = doc(collection(db, 'invoices'));
+                await runTransaction(db, async (transaction) => {
+                    const quotationRef = doc(db, 'quotations', quotation.id);
+                    const quotationDoc = await transaction.get(quotationRef);
+                    if (!quotationDoc.exists() || quotationDoc.data().status !== 'draft') { throw new Error("Quotation is already processed or does not exist."); }
+                    for (const item of quotation.items) {
+                        if (item.type === 'stock' && item.serials) {
+                            for (const serialId of item.serials) {
+                                transaction.update(doc(db, 'import_stock', item.id, 'serials', serialId), { assignedShopId: 'sold' });
+                            }
+                        }
+                    }
+                    const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id };
+                    transaction.set(newInvoiceRef, invoiceData);
+                    transaction.update(quotationRef, { status: 'invoiced' });
+                });
+            } catch (err) { console.error("Transaction failed: ", err); setError("Failed to convert to invoice. Stock was not deducted."); } 
+            finally { setIsSaving(false); }
         }
     };
     
-    const handleConvertToInvoice = async (quotation) => { /* ... existing logic ... */ };
-    const handleGeneratePdf = (quotationData) => { /* ... existing logic ... */ };
+    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
+    const handleRemoveFormItem = (index) => { setFormItems(prev => prev.filter((_, i) => i !== index)); };
+    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
+    const handleAddItemToForm = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setFormItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
+    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setFormItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
+    const formSubtotal = useMemo(() => formItems.reduce((sum, item) => sum + item.totalPrice, 0), [formItems]);
 
 
-    // --- RENDER LOGIC ---
     if (loading) return <div className="p-8 text-center">Loading...</div>;
 
-    // List View
     if (view === 'list') {
         return (
             <div className="p-4 sm:p-8">
                 {error && <div className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-100" role="alert">{error}</div>}
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-3xl font-bold text-gray-800">Quotation Management</h2>
-                    <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-                        <PlusCircleIcon /> Create Quotation
-                    </button>
+                    <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Create Quotation</button>
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
+                <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
                     <table className="min-w-full">
-                         <thead className="bg-gray-100"><tr>
-                            <th className="px-4 py-2 text-left">Quotation ID</th><th className="px-4 py-2 text-left">Customer</th><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-right">Total</th><th className="px-4 py-2 text-center">Status</th><th className="px-4 py-2 text-center">Actions</th>
+                        <thead className="bg-gray-100"><tr>
+                            <th className="px-4 py-2 text-left">Quotation ID</th><th className="px-4 py-2 text-left">Customer</th><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-right">Total (LKR)</th><th className="px-4 py-2 text-center">Status</th><th className="px-4 py-2 text-center">Actions</th>
                         </tr></thead>
                         <tbody>
                             {savedQuotations.map(q => {
                                 const customer = customers.find(c => c.id === q.customerId);
-                                const statusColor = q.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
+                                const statusColor = q.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : q.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
                                 return (
                                 <tr key={q.id} className="border-b">
                                     <td className="px-4 py-2 font-mono text-sm">{q.id}</td>
@@ -2174,6 +2170,8 @@ const QuotationManagement = ({ currentUser }) => {
                                     <td className="px-4 py-2 text-center"><span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColor}`}>{q.status}</span></td>
                                     <td className="px-4 py-2 text-center">
                                         <div className="flex justify-center space-x-2">
+                                            {q.status === 'draft' && <button onClick={() => handleConvertToInvoice(q)} disabled={isSaving} className="text-green-600 hover:text-green-900 text-sm font-medium">Invoice</button>}
+                                            <button onClick={() => generatePdf(q, 'quotation', letterheadBase64, customer)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>
                                             <button onClick={() => handleEdit(q)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
                                             <button onClick={() => handleDelete(q.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
                                         </div>
@@ -2187,31 +2185,35 @@ const QuotationManagement = ({ currentUser }) => {
         );
     }
 
-    // Form View
     if (view === 'form') {
-        // You can reuse the form JSX from the previous component here.
-        // For brevity, I'll put a placeholder. You should paste your form here.
         return (
              <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
+                <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
+                <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
+                
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? 'Edit Quotation' : 'Create New Quotation'}</h2>
+                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? `Edit Quotation #${currentQuotation.id}` : 'Create New Quotation'}</h2>
                     <div>
                          <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
                          <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">{isSaving ? 'Saving...' : 'Save Quotation'}</button>
                     </div>
                 </div>
-                {/* --- PASTE YOUR MULTI-STEP FORM JSX HERE --- */}
-                {/* For example: */}
+
                 <div className="space-y-6">
-                   <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
-                      <h3 className="text-xl font-semibold mb-4 border-b pb-2">Step 1: Select Customer</h3>
-                      {/* Customer selection logic */}
-                   </div>
-                   <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
-                      <h3 className="text-xl font-semibold mb-4 border-b pb-2">Step 2: Add Products</h3>
-                      {/* Product addition logic */}
-                   </div>
-                   {/* etc. */}
+                    <div className="bg-gray-50 p-6 rounded-lg shadow-inner"><h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
+                    <div className="bg-gray-50 p-6 rounded-lg shadow-inner"><h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToForm} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
+                    <div className="bg-gray-50 p-6 rounded-lg shadow-inner"><h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {formItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( formItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials && item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveFormItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
+                    <div className="bg-gray-50 p-6 rounded-lg shadow-inner">
+                        <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                            <div><h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4><div className="space-y-3"><div><label className="block text-sm font-medium text-gray-600">Warranty Period</label><input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-600">Warranty End Date</label><input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/></div></div></div>
+                            <div className="text-right space-y-2">
+                                <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
+                                <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {formSubtotal.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {formSubtotal.toFixed(2)}</span></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
              </div>
         );
@@ -2999,14 +3001,13 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
     );
 };
 
+// --- Main App & Dashboard ---
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('');
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
     const [importDropdownOpen, setImportDropdownOpen] = useState(false);
     const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
-    
     const [importToView, setImportToView] = useState(null);
-
     const adminDropdownRef = useRef(null);
     const importDropdownRef = useRef(null);
     const exportDropdownRef = useRef(null);
@@ -3025,26 +3026,15 @@ const Dashboard = ({ user, onSignOut }) => {
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
 
-    // Set default view on login
     useEffect(() => {
-        if (hasImportAccess) {
-            setCurrentView('import_dashboard');
-        } else if (hasExportAccess) {
-            setCurrentView('export_dashboard');
-        } else {
-             setCurrentView('import_dashboard'); // Fallback for any other roles
-        }
+        if (hasImportAccess) { setCurrentView('import_dashboard'); } 
+        else if (hasExportAccess) { setCurrentView('export_dashboard'); } 
+        else { setCurrentView('import_dashboard'); }
     }, [hasImportAccess, hasExportAccess, user.role]);
     
-    useEffect(() => {
-        if (importToView) {
-            setCurrentView('import_management');
-        }
-    }, [importToView]);
+    useEffect(() => { if (importToView) { setCurrentView('import_management'); } }, [importToView]);
 
-    const handleViewImport = (invoiceId) => {
-        setImportToView(invoiceId);
-    };
+    const handleViewImport = (invoiceId) => { setImportToView(invoiceId); };
 
     const renderContent = () => {
         switch (currentView) {
@@ -3052,10 +3042,10 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'import_management': return <ImportManagementPortal currentUser={user} importToView={importToView} onClearImportToView={() => setImportToView(null)} />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement onViewImport={handleViewImport} />;
-            case 'import_shop_management': return <ShopManagement />;
+            case 'import_shop_management': return <ShopManagement currentUser={user} />;
             case 'import_supplier_management': return <SupplierManagement />;
             case 'import_product_management': return <ProductManagement currentUser={user} />;
-            case 'quotation_management': return <QuotationManagement currentUser={user} />;
+            case 'quotation_management': return <QuotationManagement currentUser={user} />; // Corrected
             case 'invoices': return <InvoiceManagement currentUser={user} onNavigate={setCurrentView} />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
@@ -3111,6 +3101,63 @@ const Dashboard = ({ user, onSignOut }) => {
         </div>
     );
 };
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('homepage');
+  const [loading, setLoading] = useState(true);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [homepageContent, setHomepageContent] = useState(null);
+  const [productCategories, setProductCategories] = useState([]);
+
+  useEffect(() => {
+    const fetchPublicData = async () => {
+        try {
+            const contentDocRef = doc(db, 'website_content', 'homepage');
+            const contentSnap = await getDoc(contentDocRef);
+            if (contentSnap.exists()) { setHomepageContent(contentSnap.data()); }
+            const categoriesQuery = query(collection(db, 'product_categories'));
+            const categoriesSnap = await getDocs(categoriesQuery);
+            setProductCategories(categoriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (error) { console.error("Could not fetch public website data:", error); }
+    };
+    fetchPublicData();
+  }, []);
+
+  useEffect(() => {
+    if (!auth) { setLoading(false); return; }
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        const userProfile = await getUserProfile(authUser.uid);
+        setUser({ ...authUser, ...userProfile });
+      } else {
+        setUser(null);
+        setView('homepage');
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => { try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); } };
+  const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
+  const handleProductSelect = (categoryId) => { setSelectedCategoryId(categoryId); setView('product-category'); window.scrollTo(0, 0); };
+
+  const renderContent = () => {
+      if (loading) { return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>); }
+      if (user) { return <Dashboard user={user} onSignOut={handleSignOut} />; }
+      
+      switch(view) {
+          case 'signin': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><SignIn setView={setView} onLoginSuccess={handleLoginSuccess} /></div>;
+          case 'forgot-password': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><ForgotPassword setView={setView} /></div>;
+          case 'product-category': return <ProductCategoryPage categoryId={selectedCategoryId} onBack={() => { setView('homepage'); setSelectedCategoryId(null); }} />;
+          case 'homepage': 
+          default: return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} content={homepageContent} categories={productCategories} />;
+      }
+  };
+
+  return (<div className="font-sans">{renderContent()}</div>);
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
