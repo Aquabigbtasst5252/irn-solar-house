@@ -1968,26 +1968,43 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const resetForm = () => { setSelectedCustomerId(''); setQuotationItems([]); setProductType('stock'); setSelectedProductId(''); setSelectedProductQty(1); };
 
     const handleSaveQuotation = async () => {
-        if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item."); return; }
+        if (!selectedCustomerId || quotationItems.length === 0) {
+            alert("Please select a customer and add at least one item.");
+            return;
+        }
         setIsSaving(true);
         try {
-            const quotationData = { customerId: selectedCustomerId, items: quotationItems, total: subtotal, status: 'draft', createdAt: Timestamp.now(), createdBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email }, warrantyPeriod: warrantyPeriod, warrantyEndDate: warrantyEndDate, };
-            await addDoc(collection(db, 'quotations'), quotationData);
-            alert("Quotation saved successfully!");
-            resetForm();
-            await fetchData(); // Refresh the list of quotations
-        } catch (err) { console.error("Error saving quotation: ", err); setError("Could not save the quotation."); } finally { setIsSaving(false); }
-    };
+            const quotationData = {
+                customerId: selectedCustomerId,
+                items: quotationItems,
+                total: subtotal,
+                status: 'draft',
+                createdAt: Timestamp.now(),
+                createdBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
+                warrantyPeriod: warrantyPeriod,
+                warrantyEndDate: warrantyEndDate,
+            };
 
-    const handleDeleteQuotation = async (quotationId) => {
-        if (window.confirm("Are you sure you want to delete this quotation?")) {
-            try {
-                await deleteDoc(doc(db, 'quotations', quotationId));
-                await fetchData(); // Refresh list
-            } catch (err) {
-                console.error("Error deleting quotation:", err);
-                setError("Failed to delete quotation.");
-            }
+            // 1. Save to Firestore and get the new document's reference
+            const newDocRef = await addDoc(collection(db, 'quotations'), quotationData);
+
+            // 2. Create a complete object for our local state, including the new ID
+            const newQuotationForState = {
+                id: newDocRef.id,
+                ...quotationData
+            };
+
+            // 3. Add the new quotation to the top of our existing list in the state
+            setSavedQuotations(prevQuotations => [newQuotationForState, ...prevQuotations]);
+
+            alert("Quotation saved successfully!");
+            resetForm(); // 4. Finally, reset the form
+
+        } catch (err) {
+            console.error("Error saving quotation: ", err);
+            setError("Could not save the quotation. Please try again.");
+        } finally {
+            setIsSaving(false);
         }
     };
     
