@@ -3108,63 +3108,6 @@ export default function App() {
   const [homepageContent, setHomepageContent] = useState(null);
   const [productCategories, setProductCategories] = useState([]);
 
-  useEffect(() => {
-    const fetchPublicData = async () => {
-        try {
-            const contentDocRef = doc(db, 'website_content', 'homepage');
-            const contentSnap = await getDoc(contentDocRef);
-            if (contentSnap.exists()) { setHomepageContent(contentSnap.data()); }
-            const categoriesQuery = query(collection(db, 'product_categories'));
-            const categoriesSnap = await getDocs(categoriesQuery);
-            setProductCategories(categoriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-        } catch (error) { console.error("Could not fetch public website data:", error); }
-    };
-    fetchPublicData();
-  }, []);
-
-  useEffect(() => {
-    if (!auth) { setLoading(false); return; }
-    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (authUser) {
-        const userProfile = await getUserProfile(authUser.uid);
-        setUser({ ...authUser, ...userProfile });
-      } else {
-        setUser(null);
-        setView('homepage');
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleSignOut = async () => { try { await signOut(auth); } catch (error) { console.error("Error signing out: ", error); } };
-  const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
-  const handleProductSelect = (categoryId) => { setSelectedCategoryId(categoryId); setView('product-category'); window.scrollTo(0, 0); };
-
-  const renderContent = () => {
-      if (loading) { return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>); }
-      if (user) { return <Dashboard user={user} onSignOut={handleSignOut} />; }
-      
-      switch(view) {
-          case 'signin': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><SignIn setView={setView} onLoginSuccess={handleLoginSuccess} /></div>;
-          case 'forgot-password': return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><ForgotPassword setView={setView} /></div>;
-          case 'product-category': return <ProductCategoryPage categoryId={selectedCategoryId} onBack={() => { setView('homepage'); setSelectedCategoryId(null); }} />;
-          case 'homepage': 
-          default: return <HomePage onSignInClick={() => setView('signin')} onProductSelect={handleProductSelect} content={homepageContent} categories={productCategories} />;
-      }
-  };
-
-  return (<div className="font-sans">{renderContent()}</div>);
-}
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('homepage');
-  const [loading, setLoading] = useState(true);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const [homepageContent, setHomepageContent] = useState(null);
-  const [productCategories, setProductCategories] = useState([]);
-
   // Fetch all public data
   useEffect(() => {
     const fetchPublicData = async () => {
