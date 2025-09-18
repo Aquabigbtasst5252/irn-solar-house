@@ -36,7 +36,6 @@ import {
 } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ReactDOM from 'react-dom/client';
 import html2canvas from 'html2canvas';
 
 // --- Firebase Configuration ---
@@ -479,7 +478,7 @@ const CustomerManagement = ({ portalType, isModal = false, onCustomerAdded, onCl
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         const isDuplicate = customers.some(customer => 
-            customer.email.toLowerCase() === formData.email.toLowerCase() && customer.id !== formData.id
+            (customer.email || '').toLowerCase() === formData.email.toLowerCase() && customer.id !== formData.id
         );
 
         if (isDuplicate) {
@@ -595,7 +594,7 @@ const CustomerManagement = ({ portalType, isModal = false, onCustomerAdded, onCl
                                     <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.email}</p><p className="text-gray-600 whitespace-no-wrap">{customer.telephone}</p></td>
                                     {!isImport && <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.country}</p></td>}
                                     <td className="px-5 py-4 text-sm bg-white">{customer.latitude && customer.longitude ? (<a href={`https://www.google.com/maps/search/?api=1&query=${customer.latitude},${customer.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline inline-flex items-center"><MapPinIcon /> View</a>) : ('N/A')}</td>
-                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.registerDate?.toDate().toLocaleDateString()}</p></td>
+                                    <td className="px-5 py-4 text-sm bg-white"><p className="text-gray-900 whitespace-no-wrap">{customer.registerDate?.toDate ? customer.registerDate.toDate().toLocaleDateString() : ''}</p></td>
                                     <td className="px-5 py-4 text-sm bg-white text-center">
                                         <div className="flex items-center justify-center space-x-3">
                                             <button onClick={() => openEditModal(customer)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
