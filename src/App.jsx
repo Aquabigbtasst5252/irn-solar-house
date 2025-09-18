@@ -1901,7 +1901,7 @@ const ImportDashboard = () => {
 };
 
 const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
-    // States for the form
+    // --- All existing state variables remain the same ---
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [finishedProducts, setFinishedProducts] = useState([]);
@@ -1923,50 +1923,54 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
         return date.toISOString().split('T')[0];
     });
     const [isSaving, setIsSaving] = useState(false);
-
-    // New state to hold the list of saved quotations
     const [savedQuotations, setSavedQuotations] = useState([]);
 
-    const subtotal = useMemo(() => {
-        return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    }, [quotationItems]);
+    // --- Data fetching is now split into two parts ---
 
-    useEffect(() => { const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Failed to load letterhead image:", err); } }; fetchLetterhead(); }, []);
-
-    // Renamed to fetchData to reflect it fetches more than just prerequisites
-    const fetchData = useCallback(async () => {
+    // 1. A real-time listener for quotations. This is the key change.
+    useEffect(() => {
         setLoading(true);
-        try {
-            const [customersSnap, stockSnap, productsSnap, quotationsSnap] = await Promise.all([
-                getDocs(collection(db, "import_customers")),
-                getDocs(collection(db, "import_stock")),
-                getDocs(collection(db, "products")),
-                getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))) // Fetch quotations
-            ]);
-            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setSavedQuotations(quotationsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); // Set quotations state
-        } catch (err) {
-            console.error(err);
-            setError("Failed to load required data.");
-        } finally {
+        const q = query(collection(db, "quotations"), orderBy("createdAt", "desc"));
+        
+        // onSnapshot creates the real-time listener
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const quotationsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSavedQuotations(quotationsList);
             setLoading(false);
-        }
+        }, (err) => {
+            console.error("Quotation listener error: ", err);
+            setError("Could not load quotations in real-time.");
+            setLoading(false);
+        });
+
+        // This cleanup function is crucial to prevent memory leaks
+        return () => unsubscribe();
+    }, []); // Empty array ensures this runs only once when the component mounts
+
+    // 2. Fetch customers, stock, and products just once.
+    useEffect(() => {
+        const fetchPrerequisites = async () => {
+            try {
+                const [customersSnap, stockSnap, productsSnap] = await Promise.all([
+                    getDocs(collection(db, "import_customers")),
+                    getDocs(collection(db, "import_stock")),
+                    getDocs(collection(db, "products"))
+                ]);
+                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (err) {
+                console.error(err);
+                setError(prev => prev + " Failed to load prerequisite data.");
+            }
+        };
+        fetchPrerequisites();
+        const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Failed to load letterhead image:", err); } }; 
+        fetchLetterhead();
     }, []);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
 
-    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
-    const handleAddItemToQuotation = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setQuotationItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
-    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
-    const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
-    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
-    const handleGenerateQuotation = (quotationData) => { if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === quotationData.customerId); generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
-    const resetForm = () => { setSelectedCustomerId(''); setQuotationItems([]); setProductType('stock'); setSelectedProductId(''); setSelectedProductQty(1); };
-
+    // --- The handleSaveQuotation function is now much simpler ---
     const handleSaveQuotation = async () => {
         if (!selectedCustomerId || quotationItems.length === 0) {
             alert("Please select a customer and add at least one item.");
@@ -1985,20 +1989,11 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                 warrantyEndDate: warrantyEndDate,
             };
 
-            // 1. Save to Firestore and get the new document's reference
-            const newDocRef = await addDoc(collection(db, 'quotations'), quotationData);
-
-            // 2. Create a complete object for our local state, including the new ID
-            const newQuotationForState = {
-                id: newDocRef.id,
-                ...quotationData
-            };
-
-            // 3. Add the new quotation to the top of our existing list in the state
-            setSavedQuotations(prevQuotations => [newQuotationForState, ...prevQuotations]);
-
+            // Simply save the document. The real-time listener will automatically update the page.
+            await addDoc(collection(db, 'quotations'), quotationData);
+            
             alert("Quotation saved successfully!");
-            resetForm(); // 4. Finally, reset the form
+            resetForm();
 
         } catch (err) {
             console.error("Error saving quotation: ", err);
@@ -2008,55 +2003,23 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
         }
     };
     
-    const handleConvertToInvoice = async (quotation) => {
-        if (window.confirm(`This will convert Quotation ${quotation.id} to an invoice and deduct stock. Proceed?`)) {
-            setIsSaving(true);
-            try {
-                const newInvoiceRef = doc(collection(db, 'invoices'));
-                
-                await runTransaction(db, async (transaction) => {
-                    const quotationRef = doc(db, 'quotations', quotation.id);
-                    const quotationDoc = await transaction.get(quotationRef);
-                    if (!quotationDoc.exists() || quotationDoc.data().status !== 'draft') {
-                        throw new Error("Quotation is already processed or does not exist.");
-                    }
-    
-                    // 1. Deduct stock for each serial number
-                    for (const item of quotation.items) {
-                        if (item.type === 'stock' && item.serials) {
-                            for (const serialId of item.serials) {
-                                const serialRef = doc(db, 'import_stock', item.id, 'serials', serialId);
-                                transaction.update(serialRef, { assignedShopId: 'sold' }); // Mark as sold
-                            }
-                        }
-                    }
-    
-                    // 2. Create the new invoice
-                    const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id };
-                    transaction.set(newInvoiceRef, invoiceData);
-    
-                    // 3. Update the quotation status
-                    transaction.update(quotationRef, { status: 'invoiced' });
-                });
-    
-                alert('Invoice created successfully!');
-                await fetchData(); // Refresh list
-    
-            } catch (err) {
-                console.error("Transaction failed: ", err);
-                setError("Failed to convert to invoice. Stock was not deducted.");
-            } finally {
-                setIsSaving(false);
-            }
-        }
-    };
+    // --- All other functions (handleDelete, handleConvertToInvoice, etc.) remain the same ---
+    // --- But they will now trigger the listener automatically, making them more robust ---
+    const subtotal = useMemo(() => { return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0); }, [quotationItems]);
+    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
+    const handleAddItemToQuotation = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setQuotationItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
+    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
+    const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
+    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
+    const handleGenerateQuotation = (quotationData) => { if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === quotationData.customerId); generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
+    const resetForm = () => { setSelectedCustomerId(''); setQuotationItems([]); setProductType('stock'); setSelectedProductId(''); setSelectedProductQty(1); };
+    const handleDeleteQuotation = async (quotationId) => { if (window.confirm("Are you sure you want to delete this quotation?")) { try { await deleteDoc(doc(db, 'quotations', quotationId)); } catch (err) { console.error("Error deleting quotation:", err); setError("Failed to delete quotation."); } } };
+    const handleConvertToInvoice = async (quotation) => { if (window.confirm(`This will convert Quotation ${quotation.id} to an invoice and deduct stock. Proceed?`)) { setIsSaving(true); try { const newInvoiceRef = doc(collection(db, 'invoices')); await runTransaction(db, async (transaction) => { const quotationRef = doc(db, 'quotations', quotation.id); const quotationDoc = await transaction.get(quotationRef); if (!quotationDoc.exists() || quotationDoc.data().status !== 'draft') { throw new Error("Quotation is already processed or does not exist."); } for (const item of quotation.items) { if (item.type === 'stock' && item.serials) { for (const serialId of item.serials) { const serialRef = doc(db, 'import_stock', item.id, 'serials', serialId); transaction.update(serialRef, { assignedShopId: 'sold' }); } } } const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id }; transaction.set(newInvoiceRef, invoiceData); transaction.update(quotationRef, { status: 'invoiced' }); }); alert('Invoice created successfully!'); } catch (err) { console.error("Transaction failed: ", err); setError("Failed to convert to invoice. Stock was not deducted."); } finally { setIsSaving(false); } } };
+    if (loading) return <div className="p-8 text-center">Loading...</div>;
 
-
-    if (loading && !savedQuotations.length) return <div className="p-8 text-center">Loading...</div>;
-
+    // --- The JSX for rendering the page remains exactly the same ---
     return (
         <div className="p-4 sm:p-8 space-y-6">
-            {/* --- Modals and Form (Steps 1-4) --- */}
             <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
             <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
             <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
@@ -2078,8 +2041,6 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                     </div>
                 </div>
             </div>
-
-            {/* --- NEW: Saved Quotations List --- */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Saved Quotations</h3>
                 <div className="overflow-x-auto">
