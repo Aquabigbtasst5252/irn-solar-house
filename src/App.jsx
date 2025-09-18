@@ -2181,7 +2181,7 @@ const QuotationManagement = ({ currentUser }) => {
                 </div>
             </div>
         );
-    }
+    };
 
     if (view === 'form') {
         return (
