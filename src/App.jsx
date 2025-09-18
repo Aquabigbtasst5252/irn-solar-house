@@ -1,126 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signInWithPopup
-} from 'firebase/auth';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  collection,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  Timestamp,
-  writeBatch,
-  query,
-  orderBy,
-  where,
-  onSnapshot,
-  runTransaction
-} from 'firebase/firestore';
-import {
-    getStorage,
-    ref,
-    uploadBytesResumable,
-    getDownloadURL,
-    deleteObject
-} from 'firebase/storage';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, addDoc, Timestamp, writeBatch, query, orderBy, where, onSnapshot, runTransaction } from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ReactDOM from 'react-dom/client';
 import html2canvas from 'html2canvas';
-
-// Add this helper function outside of your components, near the top of the file.
-const generatePdf = (docData, type, letterheadBase64, customer) => {
-    const doc = new jsPDF();
-    
-    // Add letterhead background
-    if (letterheadBase64) {
-        const imgWidth = doc.internal.pageSize.getWidth();
-        const imgHeight = doc.internal.pageSize.getHeight();
-        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
-    }
-
-    // Header
-    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
-    doc.setFontSize(22);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 105, 45, { align: 'center' });
-
-    // Document Info
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Ref No: ${docData.id}`, 20, 60);
-    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
-
-    // Customer Info
-    doc.setFont('helvetica', 'bold');
-    doc.text('Bill To:', 20, 75);
-    doc.setFont('helvetica', 'normal');
-    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
-    doc.text(customerAddress, 20, 80);
-
-    // Table
-    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
-    const tableRows = [];
-    docData.items.forEach((item, index) => {
-        const itemData = [
-            index + 1,
-            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
-            item.qty,
-            item.unitPrice.toFixed(2),
-            item.totalPrice.toFixed(2)
-        ];
-        tableRows.push(itemData);
-    });
-
-    autoTable(doc, {
-        startY: 110,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
-        didDrawCell: (data) => {
-            if (data.column.index === 1 && data.cell.section === 'body') {
-                doc.setFontSize(8);
-            }
-        }
-    });
-
-    // Totals
-    const finalY = doc.lastAutoTable.finalY;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Subtotal:`, 140, finalY + 15);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
-    doc.text(`Grand Total:`, 140, finalY + 22);
-    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
-    
-    // Warranty Info
-    if (docData.warrantyPeriod) {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Warranty Information:', 20, finalY + 40);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
-        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
-    }
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
-    
-    doc.save(`${title}-${docData.id}.pdf`);
-};
 
 // --- Firebase Configuration ---
 const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
@@ -134,13 +20,8 @@ try {
   storage = getStorage(firebaseApp);
 } catch (error) { console.error("Error initializing Firebase:", error); }
 
-// --- Helper Functions & Data ---
-const getUserProfile = async (uid) => {
-  if (!db) return null;
-  const userDocRef = doc(db, 'users', uid);
-  const userDocSnap = await getDoc(userDocRef);
-  return userDocSnap.exists() ? userDocSnap.data() : null;
-};
+// --- Helper Functions, Data, and Icons ---
+const getUserProfile = async (uid) => { if (!db) return null; const userDocRef = doc(db, 'users', uid); const userDocSnap = await getDoc(userDocRef); return userDocSnap.exists() ? userDocSnap.data() : null; };
 const countries = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda","Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros","Congo, Democratic Republic of the","Congo, Republic of the","Costa Rica","Cote d'Ivoire","Croatia","Cuba","Cyprus","Czech Republic","Denmark","Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada","Guatemala","Guinea","Guinea-issau","Guyana","Haiti","Honduras","Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya","Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco","Mozambique","Myanmar (Burma)","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine State","Panama","Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia","Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America","Uruguay","Uzbekistan","Vanuatu","Vatican City (Holy See)","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe"];
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>;
 const WrenchScrewdriverIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>;
@@ -153,17 +34,74 @@ const MapPinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 
 const DocumentTextIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v2a1 1 0 102 0v-2zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clipRule="evenodd" /></svg>;
 const unitsOfMeasure = ["pieces (pcs)", "sets", "units", "meters (m)", "kilograms (kg)", "liters (L)"];
 
+const generatePdf = (docData, type, letterheadBase64, customer) => {
+    const doc = new jsPDF();
+    if (letterheadBase64) {
+        const imgWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+    }
+    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 45, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref No: ${docData.id}`, 20, 60);
+    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill To:', 20, 75);
+    doc.setFont('helvetica', 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    doc.text(customerAddress, 20, 80);
+    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
+    const tableRows = [];
+    docData.items.forEach((item, index) => {
+        const itemData = [
+            index + 1,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            item.qty,
+            item.unitPrice.toFixed(2),
+            item.totalPrice.toFixed(2)
+        ];
+        tableRows.push(itemData);
+    });
+    autoTable(doc, {
+        startY: 110,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [22, 160, 133] },
+        didDrawCell: (data) => {
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                doc.setFontSize(8);
+            }
+        }
+    });
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subtotal:`, 140, finalY + 15);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
+    doc.text(`Grand Total:`, 140, finalY + 22);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
+    if (docData.warrantyPeriod) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Warranty Information:', 20, finalY + 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
+        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
+    }
+    doc.setFontSize(8);
+    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
+    doc.save(`${title}-${docData.id}.pdf`);
+};
+
 // --- Reusable Components ---
 const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
     if (!isOpen) return null;
-    const sizeClasses = {
-        'md': 'max-w-md',
-        'lg': 'max-w-lg',
-        'xl': 'max-w-xl',
-        '2xl': 'max-w-2xl',
-        '4xl': 'max-w-4xl',
-        '6xl': 'max-w-6xl'
-    };
+    const sizeClasses = { 'md': 'max-w-md', 'lg': 'max-w-lg', 'xl': 'max-w-xl', '2xl': 'max-w-2xl', '4xl': 'max-w-4xl', '6xl': 'max-w-6xl' };
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
         <div className={`bg-white rounded-lg shadow-xl p-6 w-full ${sizeClasses[size]} relative max-h-[90vh] overflow-y-auto`}>
@@ -177,41 +115,18 @@ const Modal = ({ isOpen, onClose, children, size = '4xl' }) => {
 const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
   <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
     <div className="flex flex-col items-center">
-      <img
-        src="https://i.imgur.com/VtqESiF.png"
-        alt="IRN Solar House Logo"
-        className="h-24 w-auto mb-4"
-      />
+      <img src="https://i.imgur.com/VtqESiF.png" alt="IRN Solar House Logo" className="h-24 w-auto mb-4" />
       <h2 className="text-3xl font-bold text-center text-gray-800">{title}</h2>
     </div>
-
     <form className="space-y-6" onSubmit={onSubmit}>
       {fields.map(field => (
         <div key={field.id}>
-          <label htmlFor={field.id} className="text-sm font-medium text-gray-700">
-            {field.label}
-          </label>
-          <input
-            id={field.id}
-            name={field.id}
-            type={field.type}
-            required={field.required}
-            className="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder={field.placeholder}
-          />
+          <label htmlFor={field.id} className="text-sm font-medium text-gray-700">{field.label}</label>
+          <input id={field.id} name={field.id} type={field.type} required={field.required} className="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder={field.placeholder} />
         </div>
       ))}
-
       {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-
-      <div>
-        <button
-          type="submit"
-          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          {buttonText}
-        </button>
-      </div>
+      <div><button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">{buttonText}</button></div>
     </form>
     {children}
   </div>
@@ -219,90 +134,16 @@ const AuthForm = ({ title, fields, buttonText, onSubmit, error, children }) => (
 
 const SignIn = ({ setView, onLoginSuccess }) => {
   const [error, setError] = useState('');
-
-  const handleSignIn = async (e) => {
-    e.preventDefault();
-    const { email, password } = e.target.elements;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.value, password.value);
-      const userProfile = await getUserProfile(userCredential.user.uid);
-      onLoginSuccess(userProfile);
-    } catch (err) {
-      console.error("Sign-in error:", err);
-      setError(err.message);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        let userProfile = await getUserProfile(user.uid);
-
-        if (!userProfile) {
-            const newUserProfile = {
-                email: user.email,
-                displayName: user.displayName,
-                role: 'pending',
-                createdAt: Timestamp.now(),
-            };
-            await setDoc(doc(db, 'users', user.uid), newUserProfile);
-            userProfile = newUserProfile;
-        }
-        onLoginSuccess(userProfile);
-    } catch (err) {
-        console.error("Google sign-in error:", err);
-        setError(err.message);
-    }
-  };
-
-  return (
-    <AuthForm
-      title="Staff Sign In"
-      fields={[
-        { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
-        { id: 'password', label: 'Password', type: 'password', required: true, placeholder: '••••••••' },
-      ]}
-      buttonText="Sign In"
-      onSubmit={handleSignIn}
-      error={error}
-    >
-        <div className="relative my-4"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Or</span></div></div>
-        <div><button type="button" onClick={handleGoogleSignIn} className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">Sign in with Google</button></div>
-        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('forgot-password')} className="font-medium text-blue-600 hover:text-blue-500">Forgot password?</a></div>
-        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('homepage')} className="font-medium text-gray-600 hover:text-gray-500">← Back to Homepage</a></div>
-    </AuthForm>
-  );
+  const handleSignIn = async (e) => { e.preventDefault(); const { email, password } = e.target.elements; try { const userCredential = await signInWithEmailAndPassword(auth, email.value, password.value); const userProfile = await getUserProfile(userCredential.user.uid); onLoginSuccess(userProfile); } catch (err) { console.error("Sign-in error:", err); setError(err.message); } };
+  const handleGoogleSignIn = async () => { const provider = new GoogleAuthProvider(); try { const result = await signInWithPopup(auth, provider); const user = result.user; let userProfile = await getUserProfile(user.uid); if (!userProfile) { const newUserProfile = { email: user.email, displayName: user.displayName, role: 'pending', createdAt: Timestamp.now(), }; await setDoc(doc(db, 'users', user.uid), newUserProfile); userProfile = newUserProfile; } onLoginSuccess(userProfile); } catch (err) { console.error("Google sign-in error:", err); setError(err.message); } };
+  return ( <AuthForm title="Staff Sign In" fields={[{ id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' }, { id: 'password', label: 'Password', type: 'password', required: true, placeholder: '••••••••' },]} buttonText="Sign In" onSubmit={handleSignIn} error={error}> <div className="relative my-4"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Or</span></div></div> <div><button type="button" onClick={handleGoogleSignIn} className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">Sign in with Google</button></div> <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('forgot-password')} className="font-medium text-blue-600 hover:text-blue-500">Forgot password?</a></div> <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('homepage')} className="font-medium text-gray-600 hover:text-gray-500">← Back to Homepage</a></div> </AuthForm> );
 };
+
 const ForgotPassword = ({ setView }) => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const handlePasswordReset = async (e) => {
-      e.preventDefault();
-      const { email } = e.target.elements;
-      setError('');
-      setMessage('');
-      try {
-        await sendPasswordResetEmail(auth, email.value);
-        setMessage("Password reset email sent! Please check your inbox.");
-      } catch (err) {
-        setError("Failed to send reset email. Please check the address.");
-      }
-    };
-
-    return (
-      <AuthForm
-        title="Reset Your Password"
-        fields={[{ id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' }]}
-        buttonText="Send Reset Link"
-        onSubmit={handlePasswordReset}
-        error={error}
-      >
-        {message && <p className="text-sm text-green-600 text-center">{message}</p>}
-        <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('signin')} className="font-medium text-blue-600 hover:text-blue-500">Back to Sign In</a></div>
-      </AuthForm>
-    );
+    const handlePasswordReset = async (e) => { e.preventDefault(); const { email } = e.target.elements; setError(''); setMessage(''); try { await sendPasswordResetEmail(auth, email.value); setMessage("Password reset email sent! Please check your inbox."); } catch (err) { setError("Failed to send reset email. Please check the address."); } };
+    return ( <AuthForm title="Reset Your Password" fields={[{ id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' }]} buttonText="Send Reset Link" onSubmit={handlePasswordReset} error={error}> {message && <p className="text-sm text-green-600 text-center">{message}</p>} <div className="text-sm text-center mt-4"><a href="#" onClick={() => setView('signin')} className="font-medium text-blue-600 hover:text-blue-500">Back to Sign In</a></div> </AuthForm> );
 };
 
 // --- Portal Components ---
@@ -1798,144 +1639,6 @@ const ImportDashboard = () => {
     );
 };
 
-const QuotationInvoiceFlow = ({ currentUser, onNavigate, quotationToEdit, onClearEdit }) => {
-    const [customers, setCustomers] = useState([]);
-    const [stockItems, setStockItems] = useState([]);
-    const [finishedProducts, setFinishedProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [isEditing, setIsEditing] = useState(false);
-    const [editingQuoteId, setEditingQuoteId] = useState(null);
-    const [selectedCustomerId, setSelectedCustomerId] = useState('');
-    const [quotationItems, setQuotationItems] = useState([]);
-    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-    const [productType, setProductType] = useState('stock');
-    const [selectedProductId, setSelectedProductId] = useState('');
-    const [selectedProductQty, setSelectedProductQty] = useState(1);
-    const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
-    const [productForSerialSelection, setProductForSerialSelection] = useState(null);
-    const [letterheadBase64, setLetterheadBase64] = useState('');
-    const [warrantyPeriod, setWarrantyPeriod] = useState("1 Year");
-    const [warrantyEndDate, setWarrantyEndDate] = useState(() => { const date = new Date(); date.setFullYear(date.getFullYear() + 1); return date.toISOString().split('T')[0]; });
-    const [isSaving, setIsSaving] = useState(false);
-
-    useEffect(() => {
-        if (quotationToEdit) {
-            setIsEditing(true);
-            setEditingQuoteId(quotationToEdit.id);
-            setSelectedCustomerId(quotationToEdit.customerId);
-            setQuotationItems(quotationToEdit.items);
-            setWarrantyPeriod(quotationToEdit.warrantyPeriod);
-            setWarrantyEndDate(quotationToEdit.warrantyEndDate);
-        }
-    }, [quotationToEdit]);
-
-    const subtotal = useMemo(() => { return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0); }, [quotationItems]);
-    useEffect(() => { const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Failed to load letterhead image:", err); } }; fetchLetterhead(); }, []);
-    const fetchPrerequisites = useCallback(async () => { setLoading(true); try { const [customersSnap, stockSnap, productsSnap] = await Promise.all([ getDocs(collection(db, "import_customers")), getDocs(collection(db, "import_stock")), getDocs(collection(db, "products")) ]); setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); } catch (err) { console.error(err); setError("Failed to load required data."); } finally { setLoading(false); } }, []);
-    useEffect(() => { fetchPrerequisites(); }, [fetchPrerequisites]);
-    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
-    const handleAddItemToQuotation = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setQuotationItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
-    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
-    const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
-    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
-    const handleGenerateQuotation = () => { if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item."); return; } if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === selectedCustomerId); const quotationData = { id: editingQuoteId || `QUO-${Date.now().toString().slice(-6)}`, createdAt: quotationToEdit ? quotationToEdit.createdAt : Timestamp.now(), customerId: selectedCustomerId, items: quotationItems, total: subtotal, warrantyPeriod: warrantyPeriod, warrantyEndDate: warrantyEndDate }; generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
-
-    const resetForm = () => {
-        setIsEditing(false);
-        setEditingQuoteId(null);
-        setSelectedCustomerId('');
-        setQuotationItems([]);
-        setProductType('stock');
-        setSelectedProductId('');
-        setSelectedProductQty(1);
-        if(onClearEdit) onClearEdit();
-    };
-
-    const handleSaveQuotation = async () => {
-        if (!selectedCustomerId || quotationItems.length === 0) {
-            alert("Please select a customer and add at least one item to save the quotation.");
-            return;
-        }
-        setIsSaving(true);
-        try {
-            const quotationData = {
-                customerId: selectedCustomerId,
-                items: quotationItems,
-                total: subtotal,
-                status: 'draft',
-                warrantyPeriod: warrantyPeriod,
-                warrantyEndDate: warrantyEndDate,
-                lastUpdatedAt: Timestamp.now(),
-                lastUpdatedBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
-            };
-
-            if (isEditing) {
-                const docRef = doc(db, 'quotations', editingQuoteId);
-                await updateDoc(docRef, quotationData);
-                alert("Quotation updated successfully!");
-            } else {
-                quotationData.createdAt = Timestamp.now();
-                quotationData.createdBy = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email };
-                await addDoc(collection(db, 'quotations'), quotationData);
-                alert("Quotation saved successfully!");
-            }
-            
-            resetForm();
-            onNavigate('quotations_list');
-
-        } catch (err) {
-            console.error("Error saving quotation: ", err);
-            setError("Could not save the quotation. Please try again.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-    
-    const handleGenerateInvoice = () => {
-        alert("Invoice generation is the next step!");
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading...</div>;
-
-    return (
-        <div className="p-4 sm:p-8 space-y-6">
-            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
-            <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
-            <div className="flex justify-between items-center">
-                 <h2 className="text-3xl font-bold text-gray-800">{isEditing ? `Editing Quotation #${editingQuoteId}` : 'Create New Quotation'}</h2>
-                 <div>
-                    <button onClick={() => { resetForm(); onNavigate('quotations_list'); }} className="text-gray-600 hover:text-gray-900 mr-4">← Back to List</button>
-                 </div>
-            </div>
-            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
-            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
-            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                     <div><h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4><div className="space-y-3"><div><label className="block text-sm font-medium text-gray-600">Warranty Period</label><input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-600">Warranty End Date</label><input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/></div></div></div>
-                     <div className="text-right space-y-2">
-                         <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
-                         <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span></div>
-                         <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {subtotal.toFixed(2)}</span></div>
-                         <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
-                            <button onClick={handleGenerateQuotation} disabled={isSaving} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-400">Generate Quotation PDF</button>
-                            <button onClick={handleSaveQuotation} disabled={isSaving} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800 disabled:bg-green-400">
-                                {isSaving ? 'Saving...' : (isEditing ? 'Update Quotation' : 'Save Quotation')}
-                            </button>
-                            {isEditing && quotationToEdit?.status !== 'invoiced' && (
-                               <button onClick={handleGenerateInvoice} className="bg-blue-700 text-white px-5 py-2 rounded-md hover:bg-blue-800">
-                                   Generate Invoice
-                               </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 
 // Add this helper function outside of your components, near the top of the file.
@@ -2117,174 +1820,6 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                                 </tr>
                             );
                         })}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
-const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) => {
-    const [serials, setSerials] = useState([]);
-    const [selectedSerials, setSelectedSerials] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (isOpen && product) {
-            const fetchSerials = async () => {
-                setLoading(true);
-                setSelectedSerials([]);
-                try {
-                    const serialsColRef = collection(db, 'import_stock', product.id, 'serials');
-                    // Fetch serials that are not assigned to a shop yet
-                    const q = query(serialsColRef, where("assignedShopId", "==", ""));
-                    const querySnapshot = await getDocs(q);
-                    
-                    const serialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Sort by purchase date for FIFO
-                    serialsList.sort((a, b) => a.purchaseDate.toMillis() - b.purchaseDate.toMillis());
-
-                    setSerials(serialsList);
-                } catch (err) {
-                    console.error("Failed to fetch serial numbers:", err);
-                } finally {
-                    setLoading(false);
-                }
-            };
-            fetchSerials();
-        }
-    }, [isOpen, product]);
-
-    const handleCheckboxChange = (serial) => {
-        setSelectedSerials(prev => {
-            if (prev.some(s => s.id === serial.id)) {
-                return prev.filter(s => s.id !== serial.id);
-            } else {
-                if (prev.length < quantity) {
-                    return [...prev, serial];
-                }
-            }
-            return prev;
-        });
-    };
-    
-    const isSelectionComplete = selectedSerials.length === Number(quantity);
-
-    if (!isOpen) return null;
-    
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} size="2xl">
-            <h3 className="text-xl font-bold mb-4">Select Serial Numbers for {product.name}</h3>
-            <p className="mb-4 text-gray-600">Please select exactly <strong>{quantity}</strong> item(s). Showing oldest stock first (FIFO).</p>
-            {loading ? <p>Loading serials...</p> : (
-                <div className="max-h-96 overflow-y-auto border rounded-md p-2">
-                    {serials.length > 0 ? serials.map(serial => (
-                        <div key={serial.id} className="flex items-center p-2 hover:bg-gray-100 rounded-md">
-                            <input
-                                type="checkbox"
-                                id={serial.id}
-                                checked={selectedSerials.some(s => s.id === serial.id)}
-                                onChange={() => handleCheckboxChange(serial)}
-                                disabled={selectedSerials.length >= quantity && !selectedSerials.some(s => s.id === serial.id)}
-                                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label htmlFor={serial.id} className="ml-3 flex-grow grid grid-cols-3">
-                                <span className="font-mono text-sm">{serial.id}</span>
-                                <span className="text-sm text-gray-700">Cost: LKR {serial.finalCostLKR.toFixed(2)}</span>
-                                <span className="text-xs text-gray-500">Purchased: {serial.purchaseDate.toDate().toLocaleDateString()}</span>
-                            </label>
-                        </div>
-                    )) : <p>No available serial numbers found in warehouse for this item.</p>}
-                </div>
-            )}
-            <div className="mt-6 flex justify-between items-center">
-                <p className="text-sm font-semibold">{selectedSerials.length} / {quantity} selected</p>
-                <button 
-                    onClick={() => onConfirm(selectedSerials)} 
-                    disabled={!isSelectionComplete}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                    Confirm Selection
-                </button>
-            </div>
-        </Modal>
-    );
-};
-
-const QuotationList = ({ onEditQuotation }) => {
-    const [quotations, setQuotations] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [quotesSnap, customersSnap] = await Promise.all([
-                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
-                    getDocs(collection(db, "import_customers"))
-                ]);
-
-                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-            } catch (err) {
-                console.error(err);
-                setError("Failed to fetch quotations.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
-    const getCustomerName = (customerId) => {
-        const customer = customers.find(c => c.id === customerId);
-        return customer ? customer.name : "Unknown Customer";
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    return (
-        <div className="p-4 sm:p-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-                <table className="min-w-full">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="px-5 py-3 text-left">Quotation ID</th>
-                            <th className="px-5 py-3 text-left">Customer</th>
-                            <th className="px-5 py-3 text-left">Date</th>
-                            <th className="px-5 py-3 text-left">Total (LKR)</th>
-                            <th className="px-5 py-3 text-left">Status</th>
-                            <th className="px-5 py-3 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {quotations.map(quote => (
-                            <tr key={quote.id} className="border-b hover:bg-gray-50">
-                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
-                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
-                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
-                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
-                                <td className="px-5 py-4">
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {quote.status}
-                                    </span>
-                                </td>
-                                <td className="px-5 py-4 text-center">
-                                    <button 
-                                        onClick={() => onEditQuotation(quote)}
-                                        className="text-blue-600 hover:text-blue-900"
-                                    >
-                                        Edit / View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
                     </tbody>
                 </table>
             </div>
@@ -2987,6 +2522,207 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
     );
 };
 
+const QuotationList = ({ onEditQuotation }) => {
+    const [quotations, setQuotations] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [quotesSnap, customersSnap] = await Promise.all([
+                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
+                    getDocs(collection(db, "import_customers"))
+                ]);
+                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (err) {
+                console.error(err);
+                setError("Failed to fetch quotations.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const getCustomerName = (customerId) => {
+        const customer = customers.find(c => c.id === customerId);
+        return customer ? customer.name : "Unknown Customer";
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="px-5 py-3 text-left">Quotation ID</th>
+                            <th className="px-5 py-3 text-left">Customer</th>
+                            <th className="px-5 py-3 text-left">Date</th>
+                            <th className="px-5 py-3 text-left">Total (LKR)</th>
+                            <th className="px-5 py-3 text-left">Status</th>
+                            <th className="px-5 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {quotations.map(quote => (
+                            <tr key={quote.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
+                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
+                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
+                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
+                                <td className="px-5 py-4">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{quote.status}</span>
+                                </td>
+                                <td className="px-5 py-4 text-center">
+                                    <button onClick={() => onEditQuotation(quote)} className="text-blue-600 hover:text-blue-900">Edit / View</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) => {
+    const [serials, setSerials] = useState([]);
+    const [selectedSerials, setSelectedSerials] = useState([]);
+    const [loading, setLoading] = useState(true);
+    useEffect(() => { if (isOpen && product) { const fetchSerials = async () => { setLoading(true); setSelectedSerials([]); try { const serialsColRef = collection(db, 'import_stock', product.id, 'serials'); const q = query(serialsColRef, where("assignedShopId", "==", "")); const querySnapshot = await getDocs(q); const serialsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); serialsList.sort((a, b) => a.purchaseDate.toMillis() - b.purchaseDate.toMillis()); setSerials(serialsList); } catch (err) { console.error("Failed to fetch serial numbers:", err); } finally { setLoading(false); } }; fetchSerials(); } }, [isOpen, product]);
+    const handleCheckboxChange = (serial) => { setSelectedSerials(prev => { if (prev.some(s => s.id === serial.id)) { return prev.filter(s => s.id !== serial.id); } else { if (prev.length < quantity) { return [...prev, serial]; } } return prev; }); };
+    const isSelectionComplete = selectedSerials.length === Number(quantity);
+    if (!isOpen) return null;
+    return ( <Modal isOpen={isOpen} onClose={onClose} size="2xl"> <h3 className="text-xl font-bold mb-4">Select Serial Numbers for {product.name}</h3> <p className="mb-4 text-gray-600">Please select exactly <strong>{quantity}</strong> item(s). Showing oldest stock first (FIFO).</p> {loading ? <p>Loading serials...</p> : ( <div className="max-h-96 overflow-y-auto border rounded-md p-2"> {serials.length > 0 ? serials.map(serial => ( <div key={serial.id} className="flex items-center p-2 hover:bg-gray-100 rounded-md"> <input type="checkbox" id={serial.id} checked={selectedSerials.some(s => s.id === serial.id)} onChange={() => handleCheckboxChange(serial)} disabled={selectedSerials.length >= quantity && !selectedSerials.some(s => s.id === serial.id)} className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" /> <label htmlFor={serial.id} className="ml-3 flex-grow grid grid-cols-3"> <span className="font-mono text-sm">{serial.id}</span> <span className="text-sm text-gray-700">Cost: LKR {serial.finalCostLKR.toFixed(2)}</span> <span className="text-xs text-gray-500">Purchased: {serial.purchaseDate.toDate().toLocaleDateString()}</span> </label> </div> )) : <p>No available serial numbers found in warehouse for this item.</p>} </div> )} <div className="mt-6 flex justify-between items-center"> <p className="text-sm font-semibold">{selectedSerials.length} / {quantity} selected</p> <button onClick={() => onConfirm(selectedSerials)} disabled={!isSelectionComplete} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">Confirm Selection</button> </div> </Modal> );
+};
+
+const QuotationInvoiceFlow = ({ currentUser, onNavigate, quotationToEdit, onClearEdit }) => {
+    const [customers, setCustomers] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [finishedProducts, setFinishedProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingQuoteId, setEditingQuoteId] = useState(null);
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [quotationItems, setQuotationItems] = useState([]);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+    const [productType, setProductType] = useState('stock');
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [selectedProductQty, setSelectedProductQty] = useState(1);
+    const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
+    const [productForSerialSelection, setProductForSerialSelection] = useState(null);
+    const [letterheadBase64, setLetterheadBase64] = useState('');
+    const [warrantyPeriod, setWarrantyPeriod] = useState("1 Year");
+    const [warrantyEndDate, setWarrantyEndDate] = useState(() => { const date = new Date(); date.setFullYear(date.getFullYear() + 1); return date.toISOString().split('T')[0]; });
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (quotationToEdit) {
+            setIsEditing(true);
+            setEditingQuoteId(quotationToEdit.id);
+            setSelectedCustomerId(quotationToEdit.customerId);
+            setQuotationItems(quotationToEdit.items);
+            setWarrantyPeriod(quotationToEdit.warrantyPeriod);
+            setWarrantyEndDate(quotationToEdit.warrantyEndDate);
+        }
+    }, [quotationToEdit]);
+
+    const subtotal = useMemo(() => { return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0); }, [quotationItems]);
+    useEffect(() => { const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Failed to load letterhead image:", err); } }; fetchLetterhead(); }, []);
+    const fetchPrerequisites = useCallback(async () => { setLoading(true); try { const [customersSnap, stockSnap, productsSnap] = await Promise.all([ getDocs(collection(db, "import_customers")), getDocs(collection(db, "import_stock")), getDocs(collection(db, "products")) ]); setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); } catch (err) { console.error(err); setError("Failed to load required data."); } finally { setLoading(false); } }, []);
+    useEffect(() => { fetchPrerequisites(); }, [fetchPrerequisites]);
+    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
+    const handleAddItemToQuotation = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setQuotationItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
+    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
+    const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
+    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
+    const handleGenerateQuotation = () => { if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item."); return; } if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === selectedCustomerId); const quotationData = { id: editingQuoteId || `QUO-${Date.now().toString().slice(-6)}`, createdAt: quotationToEdit ? quotationToEdit.createdAt : Timestamp.now(), customerId: selectedCustomerId, items: quotationItems, total: subtotal, warrantyPeriod: warrantyPeriod, warrantyEndDate: warrantyEndDate }; generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
+
+    const resetForm = () => {
+        setIsEditing(false);
+        setEditingQuoteId(null);
+        setSelectedCustomerId('');
+        setQuotationItems([]);
+        setProductType('stock');
+        setSelectedProductId('');
+        setSelectedProductQty(1);
+        if(onClearEdit) onClearEdit();
+    };
+
+    const handleSaveQuotation = async () => {
+        if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item to save the quotation."); return; }
+        setIsSaving(true);
+        try {
+            const quotationData = {
+                customerId: selectedCustomerId,
+                items: quotationItems,
+                total: subtotal,
+                status: 'draft',
+                warrantyPeriod: warrantyPeriod,
+                warrantyEndDate: warrantyEndDate,
+                lastUpdatedAt: Timestamp.now(),
+                lastUpdatedBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
+            };
+            if (isEditing) {
+                const docRef = doc(db, 'quotations', editingQuoteId);
+                await updateDoc(docRef, quotationData);
+                alert("Quotation updated successfully!");
+            } else {
+                quotationData.createdAt = Timestamp.now();
+                quotationData.createdBy = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email };
+                await addDoc(collection(db, 'quotations'), quotationData);
+                alert("Quotation saved successfully!");
+            }
+            resetForm();
+            onNavigate('quotations_list');
+        } catch (err) { console.error("Error saving quotation: ", err); setError("Could not save the quotation. Please try again.");
+        } finally { setIsSaving(false); }
+    };
+    
+    const handleGenerateInvoice = () => { alert("Invoice generation is the next step!"); };
+    if (loading) return <div className="p-8 text-center">Loading...</div>;
+
+    return (
+        <div className="p-4 sm:p-8 space-y-6">
+            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
+            <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
+            <div className="flex justify-between items-center">
+                 <h2 className="text-3xl font-bold text-gray-800">{isEditing ? `Editing Quotation #${editingQuoteId}` : 'Create New Quotation'}</h2>
+                 <div><button onClick={() => { resetForm(); onNavigate('quotations_list'); }} className="text-gray-600 hover:text-gray-900 mr-4">← Back to List</button></div>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                     <div><h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4><div className="space-y-3"><div><label className="block text-sm font-medium text-gray-600">Warranty Period</label><input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-600">Warranty End Date</label><input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/></div></div></div>
+                     <div className="text-right space-y-2">
+                         <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
+                         <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span></div>
+                         <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {subtotal.toFixed(2)}</span></div>
+                         <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
+                            <button onClick={handleGenerateQuotation} disabled={isSaving} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-400">Generate Quotation PDF</button>
+                            <button onClick={handleSaveQuotation} disabled={isSaving} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800 disabled:bg-green-400">{isSaving ? 'Saving...' : (isEditing ? 'Update Quotation' : 'Save Quotation')}</button>
+                            {isEditing && quotationToEdit?.status !== 'invoiced' && (
+                               <button onClick={handleGenerateInvoice} className="bg-blue-700 text-white px-5 py-2 rounded-md hover:bg-blue-800">Generate Invoice</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('');
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
@@ -2994,39 +2730,30 @@ const Dashboard = ({ user, onSignOut }) => {
     const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
     const [importToView, setImportToView] = useState(null);
     const [quotationToEdit, setQuotationToEdit] = useState(null);
-
     const adminDropdownRef = useRef(null);
     const importDropdownRef = useRef(null);
     const exportDropdownRef = useRef(null);
-
     useEffect(() => { const handleClickOutside = (event) => { if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) setAdminDropdownOpen(false); if (importDropdownRef.current && !importDropdownRef.current.contains(event.target)) setImportDropdownOpen(false); if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) setExportDropdownOpen(false); }; document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside); }, []);
-
     const hasImportAccess = ['super_admin', 'admin', 'shop_worker_import'].includes(user.role);
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
-
     useEffect(() => { if (hasImportAccess) { setCurrentView('import_dashboard'); } else if (hasExportAccess) { setCurrentView('export_dashboard'); } else { setCurrentView('import_dashboard'); } }, [hasImportAccess, hasExportAccess, user.role]);
     useEffect(() => { if (importToView) { setCurrentView('import_management'); } }, [importToView]);
-
     const handleViewImport = (invoiceId) => { setImportToView(invoiceId); };
-
     const handleEditQuotation = (quote) => {
         setQuotationToEdit(quote);
         setCurrentView('quotation_form');
     };
-
     const handleNewQuotation = () => {
         setQuotationToEdit(null);
         setCurrentView('quotation_form');
     }
-    
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportDashboard />;
             case 'quotation_form': return <QuotationInvoiceFlow currentUser={user} onNavigate={setCurrentView} quotationToEdit={quotationToEdit} onClearEdit={() => setQuotationToEdit(null)} />;
             case 'quotations_list': return <QuotationList onEditQuotation={handleEditQuotation} />;
             case 'invoices': return <InvoiceManagement currentUser={user} onNavigate={setCurrentView} />;
-            // ... the rest of your cases
             case 'import_management': return <ImportManagementPortal currentUser={user} importToView={importToView} onClearImportToView={() => setImportToView(null)} />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement onViewImport={handleViewImport} />;
@@ -3040,9 +2767,7 @@ const Dashboard = ({ user, onSignOut }) => {
             default: return <ImportDashboard />;
         }
     };
-
     if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
-
     const NavLink = ({ view, children, action }) => {
         const isActive = currentView === view;
         const closeAllDropdowns = () => { setAdminDropdownOpen(false); setImportDropdownOpen(false); setExportDropdownOpen(false); };
@@ -3063,10 +2788,7 @@ const Dashboard = ({ user, onSignOut }) => {
         <div className="w-full min-h-screen bg-gray-50">
             <header className="bg-white shadow-md sticky top-0 z-40">
                 <div className="container mx-auto px-6">
-                    <div className="flex justify-between items-center py-4">
-                        <div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div>
-                        <div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>
-                    </div>
+                    <div className="flex justify-between items-center py-4"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800 hidden sm:inline">Staff Portal</span></div><div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div></div>
                     <nav className="flex items-center space-x-2 border-t">
                         {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') || currentView.startsWith('quotation') || ['invoices'].includes(currentView) ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
                             {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50">
@@ -3091,6 +2813,7 @@ const Dashboard = ({ user, onSignOut }) => {
         </div>
     );
 };
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('homepage');
