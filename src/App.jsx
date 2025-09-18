@@ -39,6 +39,89 @@ import autoTable from 'jspdf-autotable';
 import ReactDOM from 'react-dom/client';
 import html2canvas from 'html2canvas';
 
+// Add this helper function outside of your components, near the top of the file.
+const generatePdf = (docData, type, letterheadBase64, customer) => {
+    const doc = new jsPDF();
+    
+    // Add letterhead background
+    if (letterheadBase64) {
+        const imgWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+    }
+
+    // Header
+    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 45, { align: 'center' });
+
+    // Document Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref No: ${docData.id}`, 20, 60);
+    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+
+    // Customer Info
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill To:', 20, 75);
+    doc.setFont('helvetica', 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    doc.text(customerAddress, 20, 80);
+
+    // Table
+    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
+    const tableRows = [];
+    docData.items.forEach((item, index) => {
+        const itemData = [
+            index + 1,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            item.qty,
+            item.unitPrice.toFixed(2),
+            item.totalPrice.toFixed(2)
+        ];
+        tableRows.push(itemData);
+    });
+
+    autoTable(doc, {
+        startY: 110,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
+        didDrawCell: (data) => {
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                doc.setFontSize(8);
+            }
+        }
+    });
+
+    // Totals
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subtotal:`, 140, finalY + 15);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
+    doc.text(`Grand Total:`, 140, finalY + 22);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
+    
+    // Warranty Info
+    if (docData.warrantyPeriod) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Warranty Information:', 20, finalY + 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
+        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
+    }
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
+    
+    doc.save(`${title}-${docData.id}.pdf`);
+};
+
 // --- Firebase Configuration ---
 const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
 
@@ -1604,191 +1687,6 @@ const ProductManagement = ({ currentUser }) => {
     const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.serialNumber?.toLowerCase().includes(productSearchTerm.toLowerCase()));
     const filteredStockItems = stockItems.filter(item => item.name?.toLowerCase().includes(stockSearchTerm.toLowerCase()) || item.model?.toLowerCase().includes(stockSearchTerm.toLowerCase()));
 
-    const exportCostSheetPDF = async (product) => {
-        if (!product.items || product.items.length === 0) {
-            alert("Cannot generate a cost sheet for a product with no items.");
-            return;
-        }
-        if (!letterheadBase64) {
-            alert("Letterhead image has not loaded yet. Please wait a moment and try again.");
-            return;
-        }
-
-        const printableElement = document.createElement('div');
-        document.body.appendChild(printableElement);
-        const root = ReactDOM.createRoot(printableElement);
-
-        root.render(<PrintableCostSheet product={product} letterheadBase64={letterheadBase64} />);
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        try {
-            const sheetElement = printableElement.querySelector('div');
-            const canvas = await html2canvas(sheetElement, { 
-                scale: 2,
-                useCORS: true 
-            });
-
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`CostSheet-${product.serialNumber}.pdf`);
-
-        } catch (e) {
-            console.error("Failed to generate PDF:", e);
-            alert("An error occurred while generating the PDF.");
-        } finally {
-            root.unmount();
-            printableElement.remove();
-        }
-    };
-    if(loading) return <div className="p-8 text-center">Loading...</div>;
-    if(error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-     if (view === 'form') {
-        return (
-            <div className="p-4 sm:p-8 bg-white rounded-xl shadow-lg">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-bold text-gray-800">{isEditing ? 'Edit Product' : 'Create New Product'}</h2>
-                    <div>
-                         <button onClick={() => setView('list')} className="text-gray-600 hover:text-gray-900 mr-4">Back to List</button>
-                         <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Save Product</button>
-                    </div>
-                </div>
-                <fieldset className="mb-6 p-4 border rounded-md"><legend className="font-semibold px-2">Product Details</legend>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label>Product Name</label><input type="text" name="name" value={formData.name} onChange={handleFormInputChange} className="w-full p-2 border rounded"/></div>
-                        <div><label>Serial Number</label><input type="text" value={formData.serialNumber} readOnly className="w-full p-2 border rounded bg-gray-100"/></div>
-                        <div className="md:col-span-2"><label>Description</label><textarea name="description" value={formData.description} onChange={handleFormInputChange} className="w-full p-2 border rounded" rows="3"></textarea></div>
-                    </div>
-                </fieldset>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Add Stock Items</legend>
-                        <input type="text" placeholder="Search stock items..." value={stockSearchTerm} onChange={(e) => setStockSearchTerm(e.target.value)} className="w-full p-2 border rounded mb-2"/>
-                        <div className="max-h-64 overflow-y-auto">
-                            {filteredStockItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center p-2 hover:bg-gray-100 rounded">
-                                    <span>{item.name} <span className="text-xs text-gray-500">({item.model})</span></span>
-                                    <button onClick={() => handleAddItemToProduct(item)} className="text-sm bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600">+</button>
-                                </div>
-                            ))}
-                        </div>
-                    </fieldset>
-                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Required Items</legend>
-                        <div className="max-h-72 overflow-y-auto">
-                        {formData.items.length === 0 ? <p className="text-gray-500 text-center py-4">No items added yet.</p> :
-                            formData.items.map(item => (
-                                <div key={item.stockItemId} className="flex items-center space-x-2 p-2 border-b">
-                                    <span className="flex-grow">{item.name} <span className="text-xs text-gray-500">(LKR {item.avgCostLKR.toFixed(2)})</span></span>
-                                    <input type="number" value={item.qty} onChange={(e) => handleItemQuantityChange(item.stockItemId, e.target.value)} className="w-20 p-1 border rounded text-center"/>
-                                    <button onClick={() => handleRemoveItemFromProduct(item.stockItemId)} className="text-red-500 hover:text-red-700">×</button>
-                                </div>
-                            ))
-                        }
-                        </div>
-                    </fieldset>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <fieldset className="p-4 border rounded-md"><legend className="font-semibold px-2">Cost Percentages (based on Raw Material Cost)</legend>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {Object.keys(formData.costing).map(key => (
-                                <div key={key}><label className="capitalize text-sm">{key.replace(/([A-Z])/g, ' $1')}</label>
-                                <div className="relative"><input type="number" name={key} value={formData.costing[key]} onChange={handleCostingChange} className="w-full p-2 border rounded pr-8"/>
-                                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span></div></div>
-                            ))}
-                        </div>
-                    </fieldset>
-                     <fieldset className="p-4 border rounded-md bg-gray-50"><legend className="font-semibold px-2">Calculated Price</legend>
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-lg"><span className="font-medium">Raw Material Cost:</span><span>LKR {calculatedCosts.rawMaterialCost.toFixed(2)}</span></div>
-                            <hr/>
-                            <div className="flex justify-between text-xl font-bold mt-2"><span className="text-green-700">Final Unit Price:</span><span className="text-green-700">LKR {calculatedCosts.finalUnitPrice.toFixed(2)}</span></div>
-                        </div>
-                     </fieldset>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-4 sm:p-8">
-            {isCostSheetModalOpen && selectedProductForCostSheet && (
-                <Modal isOpen={isCostSheetModalOpen} onClose={() => setIsCostSheetModalOpen(false)} size="4xl">
-                    <div className="p-2">
-                        <h3 className="text-2xl font-bold text-gray-900 mb-4">Cost Sheet: {selectedProductForCostSheet.name}</h3>
-                        <div className="mb-4">
-                            <p className="text-sm text-gray-500">Last updated by: {selectedProductForCostSheet.lastUpdatedBy?.displayName || 'N/A'} on {selectedProductForCostSheet.updatedAt?.toDate().toLocaleDateString()}</p>
-                        </div>
-                        <div className="mb-4">
-                            <h4 className="font-semibold text-lg mb-2 border-b pb-1">Required Items</h4>
-                            <ul>{selectedProductForCostSheet.items.map(item => (
-                                <li key={item.stockItemId} className="flex justify-between py-1"><span>{item.name} x {item.qty}</span> <span>LKR {(item.avgCostLKR * item.qty).toFixed(2)}</span></li>
-                            ))}</ul>
-                            <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Raw Material Total:</span><span>LKR {selectedProductForCostSheet.rawMaterialCost.toFixed(2)}</span></div>
-                        </div>
-                        <div className="mb-4">
-                             <h4 className="font-semibold text-lg mb-2 border-b pb-1">Cost Breakdown</h4>
-                             <ul>{Object.entries(selectedProductForCostSheet.costBreakdown).map(([key, value]) => key !== 'rawMaterialCost' && key !== 'totalCost' && (
-                                 <li key={key} className="flex justify-between py-1 capitalize"><span>{key.replace(/([A-Z])/g, ' $1')}</span> <span>LKR {value.toFixed(2)}</span></li>
-                             ))}</ul>
-                              <div className="flex justify-between font-bold text-lg mt-2 border-t pt-1"><span>Total Production Cost:</span><span>LKR {selectedProductForCostSheet.costBreakdown.totalCost.toFixed(2)}</span></div>
-                        </div>
-                        <div className="text-center bg-green-100 p-4 rounded-lg">
-                            <p className="text-lg font-semibold text-green-800">Final Selling Price</p>
-                            <p className="text-3xl font-bold text-green-900">LKR {selectedProductForCostSheet.finalUnitPrice.toFixed(2)}</p>
-                        </div>
-                        <div className="mt-6 flex justify-end">
-                            <button onClick={() => exportCostSheetPDF(selectedProductForCostSheet)} className="bg-gray-700 text-white px-4 py-2 rounded-md hover:bg-gray-800">Export as PDF</button>
-                        </div>
-                    </div>
-                </Modal>
-            )}
-
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Product Management</h2>
-                <button onClick={handleCreateNew} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon/> Create New Product</button>
-            </div>
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                <div className="p-4 border-b">
-                    <input type="text" placeholder="Search by Product Name or Serial No..." value={productSearchTerm} onChange={(e) => setProductSearchTerm(e.target.value)} className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="overflow-x-auto"><table className="min-w-full">
-                    <thead><tr className="bg-gray-100">
-                        <th className="px-5 py-3 text-left">Serial No.</th>
-                        <th className="px-5 py-3 text-left">Product Name</th>
-                        <th className="px-5 py-3 text-left">Last Updated By</th>
-                        <th className="px-5 py-3 text-left">Final Price (LKR)</th>
-                        <th className="px-5 py-3 text-center">Actions</th>
-                    </tr></thead>
-                    <tbody>
-                        {filteredProducts.map(p => (
-                            <tr key={p.id} className="border-b hover:bg-gray-50">
-                                <td className="px-5 py-4 font-mono text-sm">{p.serialNumber}</td>
-                                <td className="px-5 py-4 font-semibold">{p.name}</td>
-                                <td className="px-5 py-4 text-sm">
-                                    <p className="text-gray-900 whitespace-no-wrap">{p.lastUpdatedBy?.displayName || 'N/A'}</p>
-                                    <p className="text-gray-600 whitespace-no-wrap text-xs">{p.updatedAt?.toDate().toLocaleDateString()}</p>
-                                </td>
-                                <td className="px-5 py-4 font-semibold text-green-700">{p.finalUnitPrice.toFixed(2)}</td>
-                                <td className="px-5 py-4 text-center">
-                                    <div className="flex justify-center space-x-2">
-                                        {['super_admin', 'admin'].includes(currentUser.role) && <button onClick={() => openCostSheet(p)} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>}
-                                        <button onClick={() => handleEdit(p)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
-                                        {currentUser.role === 'super_admin' && <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table></div>
-            </div>
-        </div>
-    );
-};
-
 const ImportDashboard = () => {
     const [stats, setStats] = useState({
         totalSales: 0,
@@ -1900,13 +1798,14 @@ const ImportDashboard = () => {
     );
 };
 
-const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
-    // ... (keep all existing useState hooks)
+const QuotationInvoiceFlow = ({ currentUser, onNavigate, quotationToEdit, onClearEdit }) => {
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [finishedProducts, setFinishedProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editingQuoteId, setEditingQuoteId] = useState(null);
     const [selectedCustomerId, setSelectedCustomerId] = useState('');
     const [quotationItems, setQuotationItems] = useState([]);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -1917,21 +1816,21 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const [productForSerialSelection, setProductForSerialSelection] = useState(null);
     const [letterheadBase64, setLetterheadBase64] = useState('');
     const [warrantyPeriod, setWarrantyPeriod] = useState("1 Year");
-    const [warrantyEndDate, setWarrantyEndDate] = useState(() => {
-        const date = new Date();
-        date.setFullYear(date.getFullYear() + 1);
-        return date.toISOString().split('T')[0];
-    });
-
-    // New state to handle the saving process
+    const [warrantyEndDate, setWarrantyEndDate] = useState(() => { const date = new Date(); date.setFullYear(date.getFullYear() + 1); return date.toISOString().split('T')[0]; });
     const [isSaving, setIsSaving] = useState(false);
 
+    useEffect(() => {
+        if (quotationToEdit) {
+            setIsEditing(true);
+            setEditingQuoteId(quotationToEdit.id);
+            setSelectedCustomerId(quotationToEdit.customerId);
+            setQuotationItems(quotationToEdit.items);
+            setWarrantyPeriod(quotationToEdit.warrantyPeriod);
+            setWarrantyEndDate(quotationToEdit.warrantyEndDate);
+        }
+    }, [quotationToEdit]);
 
-    const subtotal = useMemo(() => {
-        return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0);
-    }, [quotationItems]);
-
-    // ... (keep all existing functions as they are: useEffect for letterhead, fetchPrerequisites, etc.)
+    const subtotal = useMemo(() => { return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0); }, [quotationItems]);
     useEffect(() => { const fetchLetterhead = async () => { try { const response = await fetch('/IRN Solar House.png'); if (!response.ok) throw new Error('Letterhead not found'); const blob = await response.blob(); const reader = new FileReader(); reader.onloadend = () => setLetterheadBase64(reader.result); reader.readAsDataURL(blob); } catch (err) { console.error("Failed to load letterhead image:", err); } }; fetchLetterhead(); }, []);
     const fetchPrerequisites = useCallback(async () => { setLoading(true); try { const [customersSnap, stockSnap, productsSnap] = await Promise.all([ getDocs(collection(db, "import_customers")), getDocs(collection(db, "import_stock")), getDocs(collection(db, "products")) ]); setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); } catch (err) { console.error(err); setError("Failed to load required data."); } finally { setLoading(false); } }, []);
     useEffect(() => { fetchPrerequisites(); }, [fetchPrerequisites]);
@@ -1940,19 +1839,19 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
     const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
     const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
+    const handleGenerateQuotation = () => { if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item."); return; } if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === selectedCustomerId); const quotationData = { id: editingQuoteId || `QUO-${Date.now().toString().slice(-6)}`, createdAt: quotationToEdit ? quotationToEdit.createdAt : Timestamp.now(), customerId: selectedCustomerId, items: quotationItems, total: subtotal, warrantyPeriod: warrantyPeriod, warrantyEndDate: warrantyEndDate }; generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
 
-    const handleGenerateQuotation = () => { /* ... (keep this function as is) ... */ if (!selectedCustomerId || quotationItems.length === 0) { alert("Please select a customer and add at least one item."); return; } if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === selectedCustomerId); const quotationData = { id: `QUO-${Date.now().toString().slice(-6)}`, createdAt: Timestamp.now(), customerId: selectedCustomerId, items: quotationItems, total: subtotal, warrantyPeriod: '', warrantyEndDate: '' }; generatePdf(quotationData, 'quotation', letterheadBase64, customer); };
-
-    // New function to reset the form
     const resetForm = () => {
+        setIsEditing(false);
+        setEditingQuoteId(null);
         setSelectedCustomerId('');
         setQuotationItems([]);
         setProductType('stock');
         setSelectedProductId('');
         setSelectedProductQty(1);
+        if(onClearEdit) onClearEdit();
     };
 
-    // Renamed and updated function to SAVE the quotation
     const handleSaveQuotation = async () => {
         if (!selectedCustomerId || quotationItems.length === 0) {
             alert("Please select a customer and add at least one item to save the quotation.");
@@ -1964,17 +1863,26 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
                 customerId: selectedCustomerId,
                 items: quotationItems,
                 total: subtotal,
-                status: 'draft', // e.g., draft, invoiced, canceled
-                createdAt: Timestamp.now(),
-                createdBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
+                status: 'draft',
                 warrantyPeriod: warrantyPeriod,
                 warrantyEndDate: warrantyEndDate,
+                lastUpdatedAt: Timestamp.now(),
+                lastUpdatedBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
             };
 
-            await addDoc(collection(db, 'quotations'), quotationData);
+            if (isEditing) {
+                const docRef = doc(db, 'quotations', editingQuoteId);
+                await updateDoc(docRef, quotationData);
+                alert("Quotation updated successfully!");
+            } else {
+                quotationData.createdAt = Timestamp.now();
+                quotationData.createdBy = { uid: currentUser.uid, name: currentUser.displayName || currentUser.email };
+                await addDoc(collection(db, 'quotations'), quotationData);
+                alert("Quotation saved successfully!");
+            }
             
-            alert("Quotation saved successfully!");
             resetForm();
+            onNavigate('quotations_list');
 
         } catch (err) {
             console.error("Error saving quotation: ", err);
@@ -1983,48 +1891,128 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
             setIsSaving(false);
         }
     };
-
+    
+    const handleGenerateInvoice = () => {
+        alert("Invoice generation is the next step!");
+    };
 
     if (loading) return <div className="p-8 text-center">Loading...</div>;
 
     return (
         <div className="p-4 sm:p-8 space-y-6">
-            {/* ... (keep all the existing Modals and JSX for Steps 1, 2, and 3 as they are) ... */ }
             <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
             <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
-            <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
+            <div className="flex justify-between items-center">
+                 <h2 className="text-3xl font-bold text-gray-800">{isEditing ? `Editing Quotation #${editingQuoteId}` : 'Create New Quotation'}</h2>
+                 <div>
+                    <button onClick={() => { resetForm(); onNavigate('quotations_list'); }} className="text-gray-600 hover:text-gray-900 mr-4">← Back to List</button>
+                 </div>
+            </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
-
-            {/* Step 4: Finalize and Generate (Button text changed) */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                    <div>
-                         {/* Warranty Section is unchanged */}
-                        <h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4>
-                        <div className="space-y-3">
-                             <div><label className="block text-sm font-medium text-gray-600">Warranty Period</label><input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/></div>
-                             <div><label className="block text-sm font-medium text-gray-600">Warranty End Date</label><input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/></div>
-                        </div>
-                    </div>
-
-                    <div className="text-right space-y-2">
-                         {/* Totals Section is unchanged */}
-                        <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
-                        <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {subtotal.toFixed(2)}</span></div>
-                        
-                        {/* Buttons are updated */}
-                        <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
+                     <div><h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4><div className="space-y-3"><div><label className="block text-sm font-medium text-gray-600">Warranty Period</label><input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-600">Warranty End Date</label><input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/></div></div></div>
+                     <div className="text-right space-y-2">
+                         <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
+                         <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span></div>
+                         <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {subtotal.toFixed(2)}</span></div>
+                         <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
                             <button onClick={handleGenerateQuotation} disabled={isSaving} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-400">Generate Quotation PDF</button>
                             <button onClick={handleSaveQuotation} disabled={isSaving} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800 disabled:bg-green-400">
-                                {isSaving ? 'Saving...' : 'Save Quotation'}
+                                {isSaving ? 'Saving...' : (isEditing ? 'Update Quotation' : 'Save Quotation')}
                             </button>
+                            {isEditing && quotationToEdit?.status !== 'invoiced' && (
+                               <button onClick={handleGenerateInvoice} className="bg-blue-700 text-white px-5 py-2 rounded-md hover:bg-blue-800">
+                                   Generate Invoice
+                               </button>
+                            )}
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+};
+
+const QuotationList = ({ onEditQuotation }) => {
+    const [quotations, setQuotations] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [quotesSnap, customersSnap] = await Promise.all([
+                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
+                    getDocs(collection(db, "import_customers"))
+                ]);
+
+                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            } catch (err) {
+                console.error(err);
+                setError("Failed to fetch quotations.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const getCustomerName = (customerId) => {
+        const customer = customers.find(c => c.id === customerId);
+        return customer ? customer.name : "Unknown Customer";
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="px-5 py-3 text-left">Quotation ID</th>
+                            <th className="px-5 py-3 text-left">Customer</th>
+                            <th className="px-5 py-3 text-left">Date</th>
+                            <th className="px-5 py-3 text-left">Total (LKR)</th>
+                            <th className="px-5 py-3 text-left">Status</th>
+                            <th className="px-5 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {quotations.map(quote => (
+                            <tr key={quote.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
+                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
+                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
+                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
+                                <td className="px-5 py-4">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                        {quote.status}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-4 text-center">
+                                    <button 
+                                        onClick={() => onEditQuotation(quote)}
+                                        className="text-blue-600 hover:text-blue-900"
+                                    >
+                                        Edit / View
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
@@ -2436,6 +2424,87 @@ const SupplierManagement = () => {
                                         <button onClick={() => openEditModal(supplier)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
                                         <button onClick={() => handleDelete(supplier.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
                                     </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const QuotationList = ({ onEditQuotation }) => {
+    const [quotations, setQuotations] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [quotesSnap, customersSnap] = await Promise.all([
+                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
+                    getDocs(collection(db, "import_customers"))
+                ]);
+
+                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            } catch (err) {
+                console.error(err);
+                setError("Failed to fetch quotations.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const getCustomerName = (customerId) => {
+        const customer = customers.find(c => c.id === customerId);
+        return customer ? customer.name : "Unknown Customer";
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="px-5 py-3 text-left">Quotation ID</th>
+                            <th className="px-5 py-3 text-left">Customer</th>
+                            <th className="px-5 py-3 text-left">Date</th>
+                            <th className="px-5 py-3 text-left">Total (LKR)</th>
+                            <th className="px-5 py-3 text-left">Status</th>
+                            <th className="px-5 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {quotations.map(quote => (
+                            <tr key={quote.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
+                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
+                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
+                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
+                                <td className="px-5 py-4">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                        {quote.status}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-4 text-center">
+                                    <button 
+                                        onClick={() => onEditQuotation(quote)}
+                                        className="text-blue-600 hover:text-blue-900"
+                                    >
+                                        Edit / View
+                                    </button>
                                 </td>
                             </tr>
                         ))}
@@ -3001,59 +3070,47 @@ const Dashboard = ({ user, onSignOut }) => {
     const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
     const [importDropdownOpen, setImportDropdownOpen] = useState(false);
     const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
-    
     const [importToView, setImportToView] = useState(null);
+    const [quotationToEdit, setQuotationToEdit] = useState(null);
 
     const adminDropdownRef = useRef(null);
     const importDropdownRef = useRef(null);
     const exportDropdownRef = useRef(null);
 
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) setAdminDropdownOpen(false);
-            if (importDropdownRef.current && !importDropdownRef.current.contains(event.target)) setImportDropdownOpen(false);
-            if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) setExportDropdownOpen(false);
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    useEffect(() => { const handleClickOutside = (event) => { if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target)) setAdminDropdownOpen(false); if (importDropdownRef.current && !importDropdownRef.current.contains(event.target)) setImportDropdownOpen(false); if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) setExportDropdownOpen(false); }; document.addEventListener("mousedown", handleClickOutside); return () => document.removeEventListener("mousedown", handleClickOutside); }, []);
 
     const hasImportAccess = ['super_admin', 'admin', 'shop_worker_import'].includes(user.role);
     const hasExportAccess = ['super_admin', 'admin', 'shop_worker_export'].includes(user.role);
     const hasAdminAccess = ['super_admin', 'admin'].includes(user.role);
 
-    // Set default view on login
-    useEffect(() => {
-        if (hasImportAccess) {
-            setCurrentView('import_dashboard');
-        } else if (hasExportAccess) {
-            setCurrentView('export_dashboard');
-        } else {
-             setCurrentView('import_dashboard'); // Fallback for any other roles
-        }
-    }, [hasImportAccess, hasExportAccess, user.role]);
-    
-    useEffect(() => {
-        if (importToView) {
-            setCurrentView('import_management');
-        }
-    }, [importToView]);
+    useEffect(() => { if (hasImportAccess) { setCurrentView('import_dashboard'); } else if (hasExportAccess) { setCurrentView('export_dashboard'); } else { setCurrentView('import_dashboard'); } }, [hasImportAccess, hasExportAccess, user.role]);
+    useEffect(() => { if (importToView) { setCurrentView('import_management'); } }, [importToView]);
 
-    const handleViewImport = (invoiceId) => {
-        setImportToView(invoiceId);
+    const handleViewImport = (invoiceId) => { setImportToView(invoiceId); };
+
+    const handleEditQuotation = (quote) => {
+        setQuotationToEdit(quote);
+        setCurrentView('quotation_form');
     };
 
+    const handleNewQuotation = () => {
+        setQuotationToEdit(null);
+        setCurrentView('quotation_form');
+    }
+    
     const renderContent = () => {
         switch (currentView) {
             case 'import_dashboard': return <ImportDashboard />;
+            case 'quotation_form': return <QuotationInvoiceFlow currentUser={user} onNavigate={setCurrentView} quotationToEdit={quotationToEdit} onClearEdit={() => setQuotationToEdit(null)} />;
+            case 'quotations_list': return <QuotationList onEditQuotation={handleEditQuotation} />;
+            case 'invoices': return <InvoiceManagement currentUser={user} onNavigate={setCurrentView} />;
+            // ... the rest of your cases
             case 'import_management': return <ImportManagementPortal currentUser={user} importToView={importToView} onClearImportToView={() => setImportToView(null)} />;
             case 'import_customer_management': return <CustomerManagement portalType="import" />;
             case 'import_stock_management': return <StockManagement onViewImport={handleViewImport} />;
             case 'import_shop_management': return <ShopManagement />;
             case 'import_supplier_management': return <SupplierManagement />;
             case 'import_product_management': return <ProductManagement currentUser={user} />;
-            case 'quotation_management': return <QuotationManagement currentUser={user} onNavigate={setCurrentView} />;
-            case 'invoices': return <InvoiceManagement currentUser={user} onNavigate={setCurrentView} />;
             case 'export_dashboard': return <ExportPortal />;
             case 'export_customer_management': return <CustomerManagement portalType="export" />;
             case 'user_management': return <UserManagementPortal currentUser={user} />;
@@ -3064,10 +3121,20 @@ const Dashboard = ({ user, onSignOut }) => {
 
     if (user.role === 'pending') { return ( <div className="min-h-screen bg-gray-50 flex flex-col"> <header className="bg-white shadow-md"><nav className="container mx-auto px-6 py-4 flex justify-between items-center"><div className="flex items-center"><img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-12 w-auto"/><span className="ml-3 font-bold text-xl text-gray-800">IRN Solar House - Staff Portal</span></div><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></nav></header> <main className="flex-grow flex items-center justify-center"> <div className="text-center p-10 bg-white rounded-xl shadow-lg"><h2 className="text-2xl font-semibold text-gray-800">Welcome, {user.displayName || user.email}!</h2><p className="mt-2 text-gray-600">Your account is pending approval. Please contact an administrator.</p></div> </main> </div> );}
 
-    const NavLink = ({ view, children }) => {
+    const NavLink = ({ view, children, action }) => {
         const isActive = currentView === view;
         const closeAllDropdowns = () => { setAdminDropdownOpen(false); setImportDropdownOpen(false); setExportDropdownOpen(false); };
-        return <a href="#" onClick={(e) => { e.preventDefault(); setCurrentView(view); closeAllDropdowns(); }} className={`block px-4 py-2 text-sm ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>{children}</a>
+        const handleClick = (e) => {
+            e.preventDefault();
+            if(action) {
+                action();
+            } else {
+                setQuotationToEdit(null); // Clear edit state on normal navigation
+                setCurrentView(view);
+            }
+            closeAllDropdowns();
+        }
+        return <a href="#" onClick={handleClick} className={`block px-4 py-2 text-sm ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>{children}</a>
     };
 
     return (
@@ -3079,10 +3146,11 @@ const Dashboard = ({ user, onSignOut }) => {
                         <div className="flex items-center"><span className="text-gray-700 mr-4 hidden md:inline">Welcome, {user.displayName || user.email}</span><button onClick={onSignOut} className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md">Sign Out</button></div>
                     </div>
                     <nav className="flex items-center space-x-2 border-t">
-                        {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') || ['quotation_management', 'invoices'].includes(currentView) ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
+                        {hasImportAccess && (<div className="relative" ref={importDropdownRef}><button onClick={() => setImportDropdownOpen(!importDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('import_') || currentView.startsWith('quotation') || ['invoices'].includes(currentView) ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Import <ChevronDownIcon className="ml-1" /></button>
                             {importDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50">
                                 <NavLink view="import_dashboard">Import Dashboard</NavLink>
-                                <NavLink view="quotation_management">Quotation</NavLink>
+                                <NavLink view="quotation_form" action={handleNewQuotation}>Create Quotation</NavLink>
+                                <NavLink view="quotations_list">Quotations List</NavLink>
                                 <NavLink view="invoices">Invoices</NavLink>
                                 <NavLink view="import_management">Import Management</NavLink>
                                 <NavLink view="import_product_management">Product Management</NavLink>
@@ -3092,15 +3160,8 @@ const Dashboard = ({ user, onSignOut }) => {
                                 <NavLink view="import_supplier_management">Supplier Management</NavLink>
                                 </div>}
                         </div>)}
-                        {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
-                            {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
-                        </div>)}
-                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') || currentView.startsWith('website_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
-                            {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                                <NavLink view="user_management">User Management</NavLink>
-                                <NavLink view="website_management">Website Content</NavLink>
-                                </div>}
-                        </div>)}
+                        {hasExportAccess && ( <div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button> {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>} </div>)}
+                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') || currentView.startsWith('website_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button> {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"> <NavLink view="user_management">User Management</NavLink> <NavLink view="website_management">Website Content</NavLink> </div>} </div>)}
                     </nav>
                 </div>
             </header>
@@ -3108,7 +3169,6 @@ const Dashboard = ({ user, onSignOut }) => {
         </div>
     );
 };
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('homepage');
