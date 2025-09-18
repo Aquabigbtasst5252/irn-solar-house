@@ -2181,7 +2181,7 @@ const QuotationManagement = ({ currentUser }) => {
                 </div>
             </div>
         );
-    };
+    }
 
     if (view === 'form') {
         return (
@@ -2216,7 +2216,7 @@ const QuotationManagement = ({ currentUser }) => {
              </div>
         );
     }
-};
+}
 
 const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) => {
     const [serials, setSerials] = useState([]);
