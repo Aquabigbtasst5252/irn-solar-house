@@ -1901,7 +1901,6 @@ const ImportDashboard = () => {
 };
 
 const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
-    // ... (keep all the existing useState hooks from the previous version)
     const [customers, setCustomers] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [finishedProducts, setFinishedProducts] = useState([]);
@@ -1913,192 +1912,202 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate }) => {
     const [productType, setProductType] = useState('stock');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedProductQty, setSelectedProductQty] = useState(1);
-    
-    // New state for the serial number modal
     const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
     const [productForSerialSelection, setProductForSerialSelection] = useState(null);
+    const [letterheadBase64, setLetterheadBase64] = useState('');
+    const [warrantyPeriod, setWarrantyPeriod] = useState("1 Year");
+    const [warrantyEndDate, setWarrantyEndDate] = useState(() => {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() + 1);
+        return date.toISOString().split('T')[0];
+    });
 
-    // ... (keep the fetchPrerequisites, useEffect, and handleCustomerAdded functions as they are)
-    const fetchPrerequisites = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [customersSnap, stockSnap, productsSnap] = await Promise.all([
-                getDocs(collection(db, "import_customers")),
-                getDocs(collection(db, "import_stock")),
-                getDocs(collection(db, "products"))
-            ]);
-            setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        } catch (err) { console.error(err); setError("Failed to load required data."); }
-        finally { setLoading(false); }
+    const subtotal = useMemo(() => {
+        return quotationItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    }, [quotationItems]);
+
+    useEffect(() => {
+        const fetchLetterhead = async () => {
+            try {
+                const response = await fetch('/IRN Solar House.png');
+                if (!response.ok) throw new Error('Letterhead not found');
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => setLetterheadBase64(reader.result);
+                reader.readAsDataURL(blob);
+            } catch (err) { console.error("Failed to load letterhead image:", err); }
+        };
+        fetchLetterhead();
     }, []);
 
+    const fetchPrerequisites = useCallback(async () => { setLoading(true); try { const [customersSnap, stockSnap, productsSnap] = await Promise.all([ getDocs(collection(db, "import_customers")), getDocs(collection(db, "import_stock")), getDocs(collection(db, "products")) ]); setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setStockItems(stockSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setFinishedProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))); } catch (err) { console.error(err); setError("Failed to load required data."); } finally { setLoading(false); } }, []);
     useEffect(() => { fetchPrerequisites(); }, [fetchPrerequisites]);
-    
-    const handleCustomerAdded = (newCustomer) => {
-        setCustomers(prev => [...prev, newCustomer]);
-        setSelectedCustomerId(newCustomer.id);
-        setIsCustomerModalOpen(false);
-    };
+    const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
+    const handleAddItemToQuotation = () => { if (!selectedProductId || selectedProductQty <= 0) { alert("Please select a product and enter a valid quantity."); return; } if (productType === 'stock') { const product = stockItems.find(p => p.id === selectedProductId); setProductForSerialSelection(product); setIsSerialModalOpen(true); } else { const productToAdd = finishedProducts.find(p => p.id === selectedProductId); if (productToAdd) { const newItem = { id: productToAdd.id, name: productToAdd.name, model: productToAdd.model || '', qty: Number(selectedProductQty), unitPrice: productToAdd.finalUnitPrice || 0, totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty), type: 'finished', serials: [] }; setQuotationItems(prev => [...prev, newItem]); setSelectedProductId(''); setSelectedProductQty(1); } } };
+    const handleSerialSelectionConfirm = (selectedSerials) => { const product = productForSerialSelection; const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0); const newItem = { id: product.id, name: product.name, model: product.model || '', qty: selectedSerials.length, unitPrice: totalCost / selectedSerials.length, totalPrice: totalCost, type: 'stock', serials: selectedSerials.map(s => s.id) }; setQuotationItems(prev => [...prev, newItem]); setIsSerialModalOpen(false); setProductForSerialSelection(null); setSelectedProductId(''); setSelectedProductQty(1); };
+    const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
+    const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
 
-    const handleAddItemToQuotation = () => {
-        if (!selectedProductId || selectedProductQty <= 0) {
-            alert("Please select a product and enter a valid quantity.");
+    const handleGenerateQuotation = () => {
+        if (!selectedCustomerId || quotationItems.length === 0) {
+            alert("Please select a customer and add at least one item.");
+            return;
+        }
+        if (!letterheadBase64) {
+            alert("Letterhead image is not loaded yet. Please wait a moment and try again.");
             return;
         }
 
-        if (productType === 'stock') {
-            const product = stockItems.find(p => p.id === selectedProductId);
-            setProductForSerialSelection(product);
-            setIsSerialModalOpen(true);
-        } else { // Finished Product
-            const productToAdd = finishedProducts.find(p => p.id === selectedProductId);
-            if (productToAdd) {
-                const newItem = {
-                    id: productToAdd.id,
-                    name: productToAdd.name,
-                    model: productToAdd.model || '',
-                    qty: Number(selectedProductQty),
-                    unitPrice: productToAdd.finalUnitPrice || 0,
-                    totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty),
-                    type: 'finished',
-                    serials: [] // Finished products don't have serials in this context
-                };
-                setQuotationItems(prev => [...prev, newItem]);
-                setSelectedProductId('');
-                setSelectedProductQty(1);
-            }
-        }
-    };
-    
-    // This function is called when the user confirms their selection in the modal
-    const handleSerialSelectionConfirm = (selectedSerials) => {
-        const product = productForSerialSelection;
-        const totalCost = selectedSerials.reduce((sum, s) => sum + s.finalCostLKR, 0);
-
-        const newItem = {
-            id: product.id,
-            name: product.name,
-            model: product.model || '',
-            qty: selectedSerials.length,
-            unitPrice: totalCost / selectedSerials.length, // Average price of selected units
-            totalPrice: totalCost,
-            type: 'stock',
-            serials: selectedSerials.map(s => s.id) // Store the IDs of the selected serials
+        const customer = customers.find(c => c.id === selectedCustomerId);
+        const quotationData = {
+            id: `QUO-${Date.now().toString().slice(-6)}`,
+            createdAt: Timestamp.now(),
+            customerId: selectedCustomerId,
+            items: quotationItems,
+            total: subtotal,
+            warrantyPeriod: '', // Not typically included in quotations
+            warrantyEndDate: ''
         };
-
-        setQuotationItems(prev => [...prev, newItem]);
         
-        // Reset and close modal
-        setIsSerialModalOpen(false);
-        setProductForSerialSelection(null);
-        setSelectedProductId('');
-        setSelectedProductQty(1);
+        generatePdf(quotationData, 'quotation', letterheadBase64, customer);
     };
 
-    const handleRemoveItem = (index) => {
-        setQuotationItems(prev => prev.filter((_, i) => i !== index));
+    const handleGenerateInvoice = () => {
+        alert("Invoice generation logic will be added next!");
+        // We will add the database update logic here in the next step.
     };
-
-    const availableProducts = useMemo(() => {
-        return productType === 'stock' ? stockItems : finishedProducts;
-    }, [productType, stockItems, finishedProducts]);
 
     if (loading) return <div className="p-8 text-center">Loading...</div>;
-    // ... (keep the rest of the return statement, the JSX, from the previous version)
+
     return (
         <div className="p-4 sm:p-8 space-y-6">
-            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl">
-                <CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} />
-            </Modal>
-            
-            <SerialSelectorModal 
-                isOpen={isSerialModalOpen}
-                onClose={() => setIsSerialModalOpen(false)}
-                product={productForSerialSelection}
-                quantity={selectedProductQty}
-                onConfirm={handleSerialSelectionConfirm}
-            />
+            <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
+            <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
+            <h2 className="text-3xl font-bold text-gray-800">Create New Quotation / Invoice</h2>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
 
-            <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
-            
-            {/* Step 1: Customer Selection (JSX is unchanged) */}
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label>
-                        <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
-                            <option value="">-- Choose a customer --</option>
-                            {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)}
-                        </select>
-                    </div>
-                    <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div>
-                </div>
-            </div>
-
-            {/* Step 2: Product Selection (JSX is unchanged) */}
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products to Quotation</h3>
-                 <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label>
-                        <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white">
-                            <option value="stock">Stock Item</option>
-                            <option value="finished">Finished Product</option>
-                        </select>
-                    </div>
-                    <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label>
-                        <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
-                            <option value="">-- Choose a product --</option>
-                            {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)}
-                        </select>
-                    </div>
+                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize and Generate</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                     <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
-                        <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/>
+                        <h4 className="font-semibold text-gray-600 mb-2">Warranty Details</h4>
+                        <div className="space-y-3">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-600">Warranty Period</label>
+                                <input type="text" value={warrantyPeriod} onChange={e => setWarrantyPeriod(e.target.value)} placeholder="e.g., 1 Year, 2 Years" className="w-full p-2 border border-gray-300 rounded-md"/>
+                             </div>
+                             <div>
+                                <label className="block text-sm font-medium text-gray-600">Warranty End Date</label>
+                                <input type="date" value={warrantyEndDate} onChange={e => setWarrantyEndDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md"/>
+                             </div>
+                        </div>
                     </div>
-                    <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div>
-                 </div>
-            </div>
-            
-             {/* Step 3: Review Items (JSX is slightly changed to show total price) */}
-            <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Quotation Items</h3>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                        <thead className="bg-gray-100"><tr>
-                            <th className="px-4 py-2 text-left">Product Name & Serials</th>
-                            <th className="px-4 py-2 text-right">Quantity</th>
-                            <th className="px-4 py-2 text-right">Unit Price (LKR)</th>
-                            <th className="px-4 py-2 text-right">Total (LKR)</th>
-                            <th className="px-4 py-2 text-center">Actions</th>
-                        </tr></thead>
-                        <tbody>
-                            {quotationItems.length === 0 ? (
-                                <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr>
-                            ) : (
-                                quotationItems.map((item, index) => (
-                                    <tr key={index} className="border-b">
-                                        <td className="px-4 py-2">
-                                            <p className="font-semibold">{item.name}</p>
-                                            {item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>}
-                                        </td>
-                                        <td className="px-4 py-2 text-right">{item.qty}</td>
-                                        <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td>
-                                        <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td>
-                                        <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+
+                    <div className="text-right space-y-2">
+                        <h4 className="font-semibold text-gray-600 mb-2">Totals</h4>
+                        <div className="flex justify-between text-lg">
+                            <span className="font-medium text-gray-700">Subtotal:</span>
+                            <span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-2xl border-t pt-2 mt-2">
+                            <span className="font-bold text-gray-800">Grand Total:</span>
+                            <span className="font-bold text-green-600">LKR {subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
+                            <button onClick={handleGenerateQuotation} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700">Generate Quotation PDF</button>
+                            <button onClick={handleGenerateInvoice} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800">Generate & Save Invoice</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
+};
+
+// Add this helper function outside of your components, near the top of the file.
+const generatePdf = (docData, type, letterheadBase64, customer) => {
+    const doc = new jsPDF();
+    
+    // Add letterhead background
+    if (letterheadBase64) {
+        const imgWidth = doc.internal.pageSize.getWidth();
+        const imgHeight = doc.internal.pageSize.getHeight();
+        doc.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+    }
+
+    // Header
+    const title = type === 'invoice' ? 'INVOICE' : 'QUOTATION';
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 105, 45, { align: 'center' });
+
+    // Document Info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Ref No: ${docData.id}`, 20, 60);
+    doc.text(`Date: ${new Date(docData.createdAt.seconds * 1000).toLocaleDateString()}`, 190, 60, { align: 'right' });
+
+    // Customer Info
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill To:', 20, 75);
+    doc.setFont('helvetica', 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    doc.text(customerAddress, 20, 80);
+
+    // Table
+    const tableColumn = ["#", "Item Description", "Qty", "Unit Price (LKR)", "Total (LKR)"];
+    const tableRows = [];
+    docData.items.forEach((item, index) => {
+        const itemData = [
+            index + 1,
+            `${item.name}${item.model ? ' - ' + item.model : ''}\n${item.serials.length > 0 ? 'SN: ' + item.serials.join(', ') : ''}`,
+            item.qty,
+            item.unitPrice.toFixed(2),
+            item.totalPrice.toFixed(2)
+        ];
+        tableRows.push(itemData);
+    });
+
+    autoTable(doc, {
+        startY: 110,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [22, 160, 133] }, // A shade of green
+        didDrawCell: (data) => {
+            // For multi-line item descriptions
+            if (data.column.index === 1 && data.cell.section === 'body') {
+                doc.setFontSize(8);
+            }
+        }
+    });
+
+    // Totals
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subtotal:`, 140, finalY + 15);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 15, { align: 'right' });
+    doc.text(`Grand Total:`, 140, finalY + 22);
+    doc.text(`LKR ${docData.total.toFixed(2)}`, 190, finalY + 22, { align: 'right' });
+    
+    // Warranty Info
+    if (docData.warrantyPeriod) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Warranty Information:', 20, finalY + 40);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Period: ${docData.warrantyPeriod}`, 20, finalY + 45);
+        doc.text(`Expires On: ${docData.warrantyEndDate}`, 20, finalY + 50);
+    }
+    
+    // Footer
+    doc.setFontSize(8);
+    doc.text('Thank you for your business!', 105, 270, { align: 'center' });
+    
+    doc.save(`${title}-${docData.id}.pdf`);
 };
 
 const QuotationManagement = ({ currentUser, onNavigate }) => { 
