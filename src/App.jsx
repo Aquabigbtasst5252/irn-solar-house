@@ -2861,7 +2861,7 @@ const ProductCategoryPage = ({ categoryId, onBack }) => {
                     <p className="text-lg text-gray-600 max-w-3xl mx-auto">{category.description}</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="flex flex-wrap justify-center gap-8">
                     {models.map(model => (
                         <div key={model.id} className="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col">
                            <img src={model.imageUrl || 'https://placehold.co/400x300/EEE/31343C?text=No+Image'} alt={model.name} className="w-full h-56 object-cover"/>
@@ -2963,9 +2963,10 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 <section id="showrooms" className="py-16 sm:py-24 bg-white">
                     <div className="container mx-auto px-6">
                         <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showrooms</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {/* 👇 THIS IS THE LINE YOU NEED TO CHANGE 👇 */}
+                        <div className="flex flex-wrap justify-center gap-8"> 
                             {pageContent.showrooms.map((showroom, index) => (
-                                <div key={index} className="bg-gray-50 p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300">
+                                <div key={index} className="bg-gray-50 p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300 w-full max-w-sm">
                                     <h3 className="text-xl font-bold text-gray-800 mb-2">{showroom.name}</h3>
                                     <p className="text-gray-600 mb-4 h-16">{showroom.address}</p>
                                     <a href={showroom.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 transition-colors">
