@@ -2004,7 +2004,6 @@ const ImportDashboard = () => {
              </div>
         );
     }
-};
 
 const QuotationManagement = ({ currentUser }) => {
     const [view, setView] = useState('list'); // 'list' or 'form'
