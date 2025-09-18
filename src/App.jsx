@@ -1937,86 +1937,6 @@ const QuotationInvoiceFlow = ({ currentUser, onNavigate, quotationToEdit, onClea
     );
 };
 
-const QuotationList = ({ onEditQuotation }) => {
-    const [quotations, setQuotations] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [quotesSnap, customersSnap] = await Promise.all([
-                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
-                    getDocs(collection(db, "import_customers"))
-                ]);
-
-                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-            } catch (err) {
-                console.error(err);
-                setError("Failed to fetch quotations.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
-    const getCustomerName = (customerId) => {
-        const customer = customers.find(c => c.id === customerId);
-        return customer ? customer.name : "Unknown Customer";
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    return (
-        <div className="p-4 sm:p-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-                <table className="min-w-full">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="px-5 py-3 text-left">Quotation ID</th>
-                            <th className="px-5 py-3 text-left">Customer</th>
-                            <th className="px-5 py-3 text-left">Date</th>
-                            <th className="px-5 py-3 text-left">Total (LKR)</th>
-                            <th className="px-5 py-3 text-left">Status</th>
-                            <th className="px-5 py-3 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {quotations.map(quote => (
-                            <tr key={quote.id} className="border-b hover:bg-gray-50">
-                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
-                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
-                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
-                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
-                                <td className="px-5 py-4">
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {quote.status}
-                                    </span>
-                                </td>
-                                <td className="px-5 py-4 text-center">
-                                    <button 
-                                        onClick={() => onEditQuotation(quote)}
-                                        className="text-blue-600 hover:text-blue-900"
-                                    >
-                                        Edit / View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
 
 // Add this helper function outside of your components, near the top of the file.
 const generatePdf = (docData, type, letterheadBase64, customer) => {
@@ -2290,6 +2210,88 @@ const SerialSelectorModal = ({ isOpen, onClose, product, quantity, onConfirm }) 
         </Modal>
     );
 };
+
+const QuotationList = ({ onEditQuotation }) => {
+    const [quotations, setQuotations] = useState([]);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [quotesSnap, customersSnap] = await Promise.all([
+                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
+                    getDocs(collection(db, "import_customers"))
+                ]);
+
+                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+            } catch (err) {
+                console.error(err);
+                setError("Failed to fetch quotations.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const getCustomerName = (customerId) => {
+        const customer = customers.find(c => c.id === customerId);
+        return customer ? customer.name : "Unknown Customer";
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
+    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+
+    return (
+        <div className="p-4 sm:p-8">
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
+            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
+                <table className="min-w-full">
+                    <thead className="bg-gray-100">
+                        <tr>
+                            <th className="px-5 py-3 text-left">Quotation ID</th>
+                            <th className="px-5 py-3 text-left">Customer</th>
+                            <th className="px-5 py-3 text-left">Date</th>
+                            <th className="px-5 py-3 text-left">Total (LKR)</th>
+                            <th className="px-5 py-3 text-left">Status</th>
+                            <th className="px-5 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {quotations.map(quote => (
+                            <tr key={quote.id} className="border-b hover:bg-gray-50">
+                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
+                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
+                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
+                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
+                                <td className="px-5 py-4">
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                        {quote.status}
+                                    </span>
+                                </td>
+                                <td className="px-5 py-4 text-center">
+                                    <button 
+                                        onClick={() => onEditQuotation(quote)}
+                                        className="text-blue-600 hover:text-blue-900"
+                                    >
+                                        Edit / View
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 const ExportPortal = () => <div className="p-8"><h2 className="text-3xl font-bold text-gray-800">Spices Export Management</h2><p className="mt-4 text-gray-600">This module is under construction. Features for the spices export business will be built here.</p></div>;
 const SupplierManagement = () => {
     const [suppliers, setSuppliers] = useState([]);
@@ -2434,86 +2436,6 @@ const SupplierManagement = () => {
     );
 };
 
-const QuotationList = ({ onEditQuotation }) => {
-    const [quotations, setQuotations] = useState([]);
-    const [customers, setCustomers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [quotesSnap, customersSnap] = await Promise.all([
-                    getDocs(query(collection(db, "quotations"), orderBy("createdAt", "desc"))),
-                    getDocs(collection(db, "import_customers"))
-                ]);
-
-                setQuotations(quotesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                setCustomers(customersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-
-            } catch (err) {
-                console.error(err);
-                setError("Failed to fetch quotations.");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, []);
-
-    const getCustomerName = (customerId) => {
-        const customer = customers.find(c => c.id === customerId);
-        return customer ? customer.name : "Unknown Customer";
-    };
-
-    if (loading) return <div className="p-8 text-center">Loading Quotations...</div>;
-    if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
-
-    return (
-        <div className="p-4 sm:p-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Quotations List</h2>
-            <div className="bg-white rounded-xl shadow-lg overflow-x-auto">
-                <table className="min-w-full">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="px-5 py-3 text-left">Quotation ID</th>
-                            <th className="px-5 py-3 text-left">Customer</th>
-                            <th className="px-5 py-3 text-left">Date</th>
-                            <th className="px-5 py-3 text-left">Total (LKR)</th>
-                            <th className="px-5 py-3 text-left">Status</th>
-                            <th className="px-5 py-3 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {quotations.map(quote => (
-                            <tr key={quote.id} className="border-b hover:bg-gray-50">
-                                <td className="px-5 py-4 font-mono text-sm">{quote.id}</td>
-                                <td className="px-5 py-4">{getCustomerName(quote.customerId)}</td>
-                                <td className="px-5 py-4 text-sm">{quote.createdAt.toDate().toLocaleDateString()}</td>
-                                <td className="px-5 py-4 font-semibold">{quote.total.toFixed(2)}</td>
-                                <td className="px-5 py-4">
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                        quote.status === 'invoiced' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                        {quote.status}
-                                    </span>
-                                </td>
-                                <td className="px-5 py-4 text-center">
-                                    <button 
-                                        onClick={() => onEditQuotation(quote)}
-                                        className="text-blue-600 hover:text-blue-900"
-                                    >
-                                        Edit / View
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
 
 const WebsiteManagementPortal = ({ currentUser }) => {
     // State for data
