@@ -1,17 +1,7 @@
 import React from 'react';
-import { SunIcon, WrenchScrewdriverIcon, ShieldCheckIcon, MapPinIcon } from '../components/ui/Icons';
+import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../components/ui/Icons';
 
-/**
- * The main public-facing homepage for the website.
- * @param {object} props - The component's properties.
- * @param {Function} props.onSignInClick - Function to navigate to the sign-in view.
- * @param {Function} props.onProductSelect - Function to navigate to a specific product category page.
- * @param {object} props.content - An object containing text and data for the homepage from Firestore.
- * @param {Array<object>} props.categories - An array of product category objects from Firestore.
- * @returns {React.ReactElement} The homepage component.
- */
-const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
-    // Default content to display if Firestore data is not yet available or is missing.
+const HomePage = ({ content, categories }) => {
     const defaultContent = {
         whyChooseTitle: "Why Choose IRN Solar House?",
         whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
@@ -27,30 +17,27 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
     };
 
     const pageContent = content || defaultContent;
-    const productCategories = categories || [];
 
     return (
         <div className="bg-white text-gray-800 font-sans">
-            {/* Header and Navigation */}
             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
                 <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-                    <div className="flex items-center">
+                    <a href="#/" className="flex items-center">
                          <img src="https://i.imgur.com/VtqESiF.png" alt="Logo" className="h-10 sm:h-12 w-auto"/>
                          <span className="ml-3 font-semibold text-lg sm:text-xl text-gray-800">IRN Solar House</span>
-                    </div>
+                    </a>
                     <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
                         <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#showrooms" className="hover:text-yellow-600 transition-colors">Showrooms</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
                     </div>
-                    <button onClick={onSignInClick} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
+                    <a href="#/signin" className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base py-2 px-4 sm:px-5 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
                         Staff Sign In
-                    </button>
+                    </a>
                 </nav>
             </header>
 
-            {/* Hero Video Section */}
             <section className="relative h-screen w-full flex items-center justify-center text-white overflow-hidden">
                 <video autoPlay loop muted playsInline className="absolute z-0 w-full h-full object-cover">
                     <source src="/hero-video.mp4" type="video/mp4" />
@@ -58,7 +45,6 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </video>
             </section>
             
-            {/* 'Why Choose Us' Section */}
             <section id="about" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800">{pageContent.whyChooseTitle}</h2>
@@ -71,32 +57,55 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
 
-            {/* Products Section */}
             <section id="products" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                         {productCategories.map(category => (
-                            <div key={category.id} onClick={() => onProductSelect(category.id)} className="cursor-pointer rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
+                         {(categories || []).map(category => (
+                            <a key={category.id} href={`#/products/${category.id}`} className="cursor-pointer rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300 group">
                                 <img src={category.imageUrl} alt={category.name} className="w-full h-64 object-cover"/>
                                 <div className="p-6 bg-white">
                                     <h3 className="text-2xl font-bold mb-2 text-gray-900 group-hover:text-blue-600 transition-colors">{category.name}</h3>
                                     <p className="text-gray-700">{category.description}</p>
                                 </div>
-                            </div>
+                            </a>
                          ))}
                     </div>
                 </div>
             </section>
 
-            {/* Showrooms Section - only renders if showroom data exists */}
+            {/* --- New Solar AC Hybrid Section --- */}
+            <section id="hybrid-ac" className="py-16 sm:py-24 bg-white">
+                <div className="container mx-auto px-6">
+                    <div className="grid lg:grid-cols-2 gap-12 items-center">
+                        <div className="order-2 lg:order-1">
+                            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">Introducing the Future of Cooling</h2>
+                            <p className="text-yellow-600 font-semibold text-lg mb-4">Solar Hybrid Air Conditioners</p>
+                            <p className="text-gray-600 mb-6">
+                                Experience revolutionary cooling technology that runs on free solar energy during the day and automatically switches to the national grid at night. Our hybrid ACs drastically reduce your electricity bills while providing uninterrupted comfort, 24/7. It's the smartest way to stay cool in Sri Lanka.
+                            </p>
+                            <a href="#contact" className="bg-green-600 hover:bg-green-700 text-white font-bold text-lg py-3 px-8 rounded-full shadow-md hover:shadow-lg transition-all duration-300">
+                                Enquire Now
+                            </a>
+                        </div>
+                        <div className="order-1 lg:order-2">
+                            <video autoPlay loop muted playsInline className="rounded-2xl shadow-2xl w-full">
+                                <source src="/Solar_AC_Hybrid_Power_Video_Generation.mp4" type="video/mp4" />
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
             {pageContent.showrooms && pageContent.showrooms.length > 0 && (
-                <section id="showrooms" className="py-16 sm:py-24 bg-white">
+                <section id="showrooms" className="py-16 sm:py-24 bg-gray-50">
                     <div className="container mx-auto px-6">
                         <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showrooms</h2>
                         <div className="flex flex-wrap justify-center gap-8"> 
                             {pageContent.showrooms.map((showroom, index) => (
-                                <div key={index} className="bg-gray-50 p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300 w-full max-w-sm">
+                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300 w-full max-w-sm">
                                     <h3 className="text-xl font-bold text-gray-800 mb-2">{showroom.name}</h3>
                                     <p className="text-gray-600 mb-4 h-16">{showroom.address}</p>
                                     <a href={showroom.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 transition-colors">
@@ -110,7 +119,6 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </section>
             )}
 
-            {/* Contact Section */}
             <section id="contact" className="py-20 bg-gray-800 text-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-yellow-400">Ready to Go Solar?</h2>
@@ -123,14 +131,10 @@ const HomePage = ({ onSignInClick, onProductSelect, content, categories }) => {
                 </div>
             </section>
             
-            {/* Footer */}
-            <footer className="bg-gray-900 text-white py-6">
-                <div className="container mx-auto px-6 text-center text-sm text-gray-400">
-                    <p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p>
-                </div>
-            </footer>
+            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
         </div>
     );
 };
 
 export default HomePage;
+
