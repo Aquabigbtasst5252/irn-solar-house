@@ -5,13 +5,26 @@ const HomePage = ({ content, categories }) => {
     // --- State for Advertisement Slider ---
     const adImages = ['/2.png', '/3.png']; // Updated image list
     const [currentAdIndex, setCurrentAdIndex] = useState(0);
+    
+    // --- State for Responsive Video ---
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => {
         const adTimer = setInterval(() => {
             setCurrentAdIndex(prevIndex => (prevIndex + 1) % adImages.length);
         }, 5000); // Change ad image every 5 seconds
 
-        return () => clearInterval(adTimer);
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup timers and event listeners
+        return () => {
+            clearInterval(adTimer);
+            window.removeEventListener('resize', handleResize);
+        };
     }, [adImages.length]);
 
     const defaultContent = {
@@ -62,13 +75,17 @@ const HomePage = ({ content, categories }) => {
 
             <section className="relative h-screen w-full flex items-center justify-center text-white overflow-hidden">
                 <video 
+                    key={isMobile ? 'mobile' : 'desktop'} // Key forces re-render when switching between videos
                     autoPlay 
                     loop 
                     muted 
                     playsInline 
                     className="absolute z-0 w-full h-full object-cover"
                 >
-                    <source src="/Blue and Black Gradient Abstract YouTube Intro Video.mp4" type="video/mp4" />
+                    <source 
+                        src={isMobile ? "/Blue and Black Gradient Abstract YouTube Intro Video (Facebook Video).mp4" : "/Blue and Black Gradient Abstract YouTube Intro Video.mp4"} 
+                        type="video/mp4" 
+                    />
                     Your browser does not support the video tag.
                 </video>
                 
@@ -86,12 +103,10 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
 
-            {/* --- NEW Advertisement Image Panel Section --- */}
             <section className="py-16 sm:py-24 bg-gray-100">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Featured Products</h2>
                     <div className="relative w-full max-w-5xl mx-auto">
-                        {/* Image Container using CSS Grid for stacking */}
                         <div className="grid bg-white rounded-2xl overflow-hidden shadow-2xl p-4">
                             {adImages.map((image, index) => (
                                 <img
@@ -102,7 +117,6 @@ const HomePage = ({ content, categories }) => {
                                 />
                             ))}
                         </div>
-                        {/* Navigation Dots */}
                         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-10 flex space-x-3">
                             {adImages.map((_, index) => (
                                 <button
@@ -188,7 +202,7 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
             
-            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
+            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.Design by Chamal madushanke</p></div></footer>
         </div>
     );
 };
