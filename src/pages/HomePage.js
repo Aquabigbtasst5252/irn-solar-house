@@ -83,7 +83,7 @@ const HomePage = ({ content, categories }) => {
                     className="absolute z-0 w-full h-full object-cover"
                 >
                     <source 
-                        src={isMobile ? "/Blue and Black Gradient Abstract YouTube Intro Video (Facebook Video).mp4" : "/Blue and Black Gradient Abstract YouTube Intro Video.mp4"} 
+                        src={isMobile ? "/mobile.mp4" : "/Blue and Black Gradient Abstract YouTube Intro Video.mp4"} 
                         type="video/mp4" 
                     />
                     Your browser does not support the video tag.
@@ -202,7 +202,7 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
             
-            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.Design by Chamal madushanke</p></div></footer>
+            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
         </div>
     );
 };
