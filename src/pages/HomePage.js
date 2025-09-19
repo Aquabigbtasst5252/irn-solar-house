@@ -1,7 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../components/ui/Icons';
 
 const HomePage = ({ content, categories }) => {
+    // --- State for Advertisement Slider ---
+    const adImages = ['/2.png', '/3.png']; // Updated image list
+    const [currentAdIndex, setCurrentAdIndex] = useState(0);
+
+    useEffect(() => {
+        const adTimer = setInterval(() => {
+            setCurrentAdIndex(prevIndex => (prevIndex + 1) % adImages.length);
+        }, 5000); // Change ad image every 5 seconds
+
+        return () => clearInterval(adTimer);
+    }, [adImages.length]);
+
     const defaultContent = {
         whyChooseTitle: "Why Choose IRN Solar House?",
         whyChooseSubtitle: "We are committed to providing top-tier solar technology and exceptional service across Sri Lanka.",
@@ -20,6 +32,16 @@ const HomePage = ({ content, categories }) => {
 
     return (
         <div className="bg-white text-gray-800 font-sans">
+             <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                .animate-fadeIn {
+                    animation: fadeIn 1.5s ease-in-out forwards;
+                }
+            `}</style>
+
             <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
                 <nav className="container mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
                     <a href="#/" className="flex items-center">
@@ -39,10 +61,17 @@ const HomePage = ({ content, categories }) => {
             </header>
 
             <section className="relative h-screen w-full flex items-center justify-center text-white overflow-hidden">
-                <video autoPlay loop muted playsInline className="absolute z-0 w-full h-full object-cover">
-                    <source src="/hero-video.mp4" type="video/mp4" />
+                <video 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline 
+                    className="absolute z-0 w-full h-full object-cover"
+                >
+                    <source src="/Blue and Black Gradient Abstract YouTube Intro Video.mp4" type="video/mp4" />
                     Your browser does not support the video tag.
                 </video>
+                
             </section>
             
             <section id="about" className="py-16 sm:py-24 bg-white">
@@ -57,7 +86,37 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
 
-            <section id="products" className="py-16 sm:py-24 bg-gray-50">
+            {/* --- NEW Advertisement Image Panel Section --- */}
+            <section className="py-16 sm:py-24 bg-gray-100">
+                <div className="container mx-auto px-6">
+                    <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Featured Products</h2>
+                    <div className="relative w-full max-w-5xl mx-auto">
+                        {/* Image Container using CSS Grid for stacking */}
+                        <div className="grid bg-white rounded-2xl overflow-hidden shadow-2xl p-4">
+                            {adImages.map((image, index) => (
+                                <img
+                                    key={`ad-${image}`}
+                                    src={image}
+                                    alt={`Advertisement ${index + 1}`}
+                                    className={`w-full h-auto object-contain transition-opacity duration-1000 ease-in-out col-start-1 row-start-1 ${index === currentAdIndex ? 'opacity-100' : 'opacity-0'}`}
+                                />
+                            ))}
+                        </div>
+                        {/* Navigation Dots */}
+                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-10 flex space-x-3">
+                            {adImages.map((_, index) => (
+                                <button
+                                    key={`dot-${index}`}
+                                    onClick={() => setCurrentAdIndex(index)}
+                                    className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentAdIndex ? 'bg-blue-600 scale-125' : 'bg-gray-400 hover:bg-gray-600'}`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="products" className="py-16 sm:py-24 bg-white">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Core Products</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -74,8 +133,7 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
 
-            {/* --- New Solar AC Hybrid Section --- */}
-            <section id="hybrid-ac" className="py-16 sm:py-24 bg-white">
+            <section id="hybrid-ac" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
                     <div className="grid lg:grid-cols-2 gap-12 items-center">
                         <div className="order-2 lg:order-1">
@@ -98,14 +156,13 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
 
-
             {pageContent.showrooms && pageContent.showrooms.length > 0 && (
-                <section id="showrooms" className="py-16 sm:py-24 bg-gray-50">
+                <section id="showrooms" className="py-16 sm:py-24 bg-white">
                     <div className="container mx-auto px-6">
                         <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Visit Our Showrooms</h2>
                         <div className="flex flex-wrap justify-center gap-8"> 
                             {pageContent.showrooms.map((showroom, index) => (
-                                <div key={index} className="bg-white p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300 w-full max-w-sm">
+                                <div key={index} className="bg-gray-50 p-6 rounded-xl shadow-lg text-center transform hover:-translate-y-2 transition-transform duration-300 w-full max-w-sm">
                                     <h3 className="text-xl font-bold text-gray-800 mb-2">{showroom.name}</h3>
                                     <p className="text-gray-600 mb-4 h-16">{showroom.address}</p>
                                     <a href={showroom.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center font-semibold text-blue-600 hover:text-blue-800 transition-colors">
