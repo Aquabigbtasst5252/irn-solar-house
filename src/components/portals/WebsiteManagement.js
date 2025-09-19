@@ -1,0 +1,363 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { db, storage } from '../../services/firebase';
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, addDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import Modal from '../ui/Modal';
+import { PlusCircleIcon, PencilIcon, TrashIcon } from '../ui/Icons';
+
+/**
+ * A portal for managing all public-facing website content.
+ * @returns {React.ReactElement} The Website Management component.
+ */
+const WebsiteManagementPortal = () => {
+    // State for data
+    const [content, setContent] = useState(null);
+    const [categories, setCategories] = useState([]);
+    const [models, setModels] = useState({});
+    
+    // State for UI
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [uploadProgress, setUploadProgress] = useState(0);
+
+    // State for Model (Product) Modal
+    const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+    const [currentModel, setCurrentModel] = useState(null);
+    const [currentCategoryForModel, setCurrentCategoryForModel] = useState(null);
+
+    // State for Category Modal
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [currentCategoryForEdit, setCurrentCategoryForEdit] = useState(null);
+
+    // Fetch all data on component mount
+    const fetchAllData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const contentDocRef = doc(db, 'website_content', 'homepage');
+            const contentSnap = await getDoc(contentDocRef);
+            setContent(contentSnap.exists() ? contentSnap.data() : {});
+
+            const categoriesQuery = query(collection(db, 'product_categories'), orderBy("name", "asc"));
+            const categoriesSnapshot = await getDocs(categoriesQuery);
+            const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setCategories(categoriesData);
+
+            const modelsData = {};
+            for (const category of categoriesData) {
+                const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
+                const modelsSnapshot = await getDocs(modelsQuery);
+                modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            }
+            setModels(modelsData);
+        } catch (err) {
+            console.error("Error fetching website content:", err);
+            setError("Failed to load website content.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchAllData();
+    }, [fetchAllData]);
+
+    // --- GENERAL CONTENT FUNCTIONS ---
+    const handleContentInputChange = (e) => setContent(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+    const handleShowroomChange = (index, e) => {
+        const updatedShowrooms = [...(content.showrooms || [])];
+        updatedShowrooms[index] = { ...updatedShowrooms[index], [e.target.name]: e.target.value };
+        setContent(prev => ({ ...prev, showrooms: updatedShowrooms }));
+    };
+
+    const addShowroom = () => {
+        const newShowrooms = [...(content.showrooms || []), { name: '', address: '', mapUrl: '' }];
+        setContent(prev => ({ ...prev, showrooms: newShowrooms }));
+    };
+
+    const removeShowroom = (index) => {
+        const updatedShowrooms = content.showrooms.filter((_, i) => i !== index);
+        setContent(prev => ({ ...prev, showrooms: updatedShowrooms }));
+    };
+
+    const handleSaveGeneralContent = async () => {
+        setSaving(true);
+        try {
+            await setDoc(doc(db, 'website_content', 'homepage'), content, { merge: true });
+            setSuccess("Homepage content saved!");
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (err) { setError("Failed to save homepage content."); } finally { setSaving(false); }
+    };
+
+    // --- CATEGORY MANAGEMENT FUNCTIONS ---
+    const openAddCategoryModal = () => {
+        setCurrentCategoryForEdit({ name: '', description: '', imageUrl: '', imagePath: '' });
+        setIsCategoryModalOpen(true);
+    };
+    const openEditCategoryModal = (category) => {
+        setCurrentCategoryForEdit(category);
+        setIsCategoryModalOpen(true);
+    };
+    const handleCategoryInputChange = (e) => setCurrentCategoryForEdit(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleCategoryFileChange = (e) => {
+        if (e.target.files[0]) setCurrentCategoryForEdit(prev => ({ ...prev, imageFile: e.target.files[0] }));
+    };
+    const handleCategorySubmit = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        let categoryData = { ...currentCategoryForEdit };
+        try {
+            if (categoryData.imageFile) {
+                if (categoryData.id && categoryData.imagePath) {
+                    await deleteObject(ref(storage, categoryData.imagePath));
+                }
+                const filePath = `category_images/${Date.now()}_${categoryData.imageFile.name}`;
+                const storageRef = ref(storage, filePath);
+                const uploadTask = uploadBytesResumable(storageRef, categoryData.imageFile);
+                const downloadURL = await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed',
+                        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+                        (error) => reject(error),
+                        async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+                    );
+                });
+                categoryData.imageUrl = downloadURL;
+                categoryData.imagePath = filePath;
+            }
+            delete categoryData.imageFile;
+            const docId = categoryData.id;
+            delete categoryData.id;
+            if (docId) {
+                await updateDoc(doc(db, 'product_categories', docId), categoryData);
+            } else {
+                await addDoc(collection(db, 'product_categories'), categoryData);
+            }
+            setIsCategoryModalOpen(false);
+            fetchAllData();
+        } catch (err) {
+            console.error("Failed to save category", err);
+            setError("Failed to save category.");
+        } finally {
+            setSaving(false);
+            setUploadProgress(0);
+        }
+    };
+    const handleDeleteCategory = async (category) => {
+        if (window.confirm(`Are you sure you want to delete "${category.name}"? This will also delete ALL products inside it.`)) {
+            try {
+                if (category.imagePath) await deleteObject(ref(storage, category.imagePath));
+                await deleteDoc(doc(db, 'product_categories', category.id));
+                fetchAllData();
+            } catch (err) { setError("Failed to delete category."); }
+        }
+    };
+
+    // --- MODEL (PRODUCT) MANAGEMENT FUNCTIONS ---
+    const openAddModelModal = (category) => {
+        setCurrentCategoryForModel(category);
+        setCurrentModel({ name: '', description: '', price: 0, imageUrl: '', imagePath: '' });
+        setIsModelModalOpen(true);
+    };
+    const openEditModelModal = (category, model) => {
+        setCurrentCategoryForModel(category);
+        setCurrentModel(model);
+        setIsModelModalOpen(true);
+    };
+    const handleModelInputChange = (e) => setCurrentModel(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleModelFileChange = (e) => {
+        if (e.target.files[0]) setCurrentModel(prev => ({ ...prev, imageFile: e.target.files[0] }));
+    };
+    const handleModelSubmit = async (e) => {
+        e.preventDefault();
+        if (!currentCategoryForModel || !currentModel) return;
+        setSaving(true);
+        const modelData = {
+            name: currentModel.name,
+            description: currentModel.description,
+            price: Number(currentModel.price) || 0,
+            imageUrl: currentModel.imageUrl,
+            imagePath: currentModel.imagePath,
+        };
+        try {
+            let newImageUrl = modelData.imageUrl;
+            let newImagePath = modelData.imagePath;
+            if (currentModel.imageFile) {
+                if (currentModel.id && currentModel.imagePath) {
+                    await deleteObject(ref(storage, currentModel.imagePath));
+                }
+                const filePath = `public_products/${currentCategoryForModel.id}/${Date.now()}_${currentModel.imageFile.name}`;
+                const storageRef = ref(storage, filePath);
+                const uploadTask = uploadBytesResumable(storageRef, currentModel.imageFile);
+                newImageUrl = await new Promise((resolve, reject) => {
+                    uploadTask.on('state_changed',
+                        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+                        (error) => reject(error),
+                        async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
+                    );
+                });
+                newImagePath = filePath;
+            }
+            const finalDataToSave = { ...modelData, imageUrl: newImageUrl, imagePath: newImagePath };
+            const collectionRef = collection(db, 'product_categories', currentCategoryForModel.id, 'models');
+            if (currentModel.id) {
+                await updateDoc(doc(collectionRef, currentModel.id), finalDataToSave);
+            } else {
+                finalDataToSave.createdAt = Timestamp.now();
+                await addDoc(collectionRef, finalDataToSave);
+            }
+            setIsModelModalOpen(false);
+            fetchAllData();
+        } catch (err) {
+            console.error("Failed to save model", err);
+            setError("Failed to save model.");
+        } finally {
+            setSaving(false);
+            setUploadProgress(0);
+        }
+    };
+    const handleDeleteModel = async (category, model) => {
+        if (window.confirm(`Are you sure you want to delete the product "${model.name}"?`)) {
+            try {
+                if (model.imagePath) await deleteObject(ref(storage, model.imagePath));
+                await deleteDoc(doc(db, 'product_categories', category.id, 'models', model.id));
+                fetchAllData();
+            } catch (err) { setError("Failed to delete model."); }
+        }
+    };
+
+    if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
+
+    return (
+        <div className="p-4 sm:p-8 space-y-8">
+            <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">{currentCategoryForEdit?.id ? 'Edit' : 'Add New'} Product Category</h3>
+                <form onSubmit={handleCategorySubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium">Category Name</label><input type="text" name="name" required value={currentCategoryForEdit?.name || ''} onChange={handleCategoryInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Description for Homepage</label><textarea name="description" required value={currentCategoryForEdit?.description || ''} onChange={handleCategoryInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
+                    <div><label className="block text-sm font-medium">Category Image</label><input type="file" name="imageFile" onChange={handleCategoryFileChange} className="mt-1 w-full text-sm"/></div>
+                    {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${uploadProgress}%`}}></div></div>}
+                    {currentCategoryForEdit?.imageUrl && !currentCategoryForEdit?.imageFile && <img src={currentCategoryForEdit.imageUrl} alt="Current" className="w-32 h-auto object-cover rounded-md mt-2"/>}
+                    <div className="flex justify-end pt-4"><button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save Category'}</button></div>
+                </form>
+            </Modal>
+            <Modal isOpen={isModelModalOpen} onClose={() => setIsModelModalOpen(false)} size="2xl">
+                <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Product for {currentCategoryForModel?.name}</h3>
+                <form onSubmit={handleModelSubmit} className="space-y-4">
+                    <div><label className="block text-sm font-medium">Product Name</label><input type="text" name="name" required value={currentModel?.name || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Description</label><textarea name="description" required value={currentModel?.description || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
+                    <div><label className="block text-sm font-medium">Price (LKR)</label><input type="number" name="price" required value={currentModel?.price || 0} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                    <div><label className="block text-sm font-medium">Product Image</label><input type="file" name="imageFile" onChange={handleModelFileChange} className="mt-1 w-full text-sm"/></div>
+                    {uploadProgress > 0 && <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-blue-600 h-2.5 rounded-full" style={{width: `${uploadProgress}%`}}></div></div>}
+                    {currentModel?.imageUrl && !currentModel?.imageFile && <img src={currentModel.imageUrl} alt="Current" className="w-32 h-32 object-cover rounded-md mt-2"/>}
+                    <div className="flex justify-end pt-4"><button type="submit" disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save Product'}</button></div>
+                </form>
+            </Modal>
+            
+            <div className="flex justify-between items-center"><h2 className="text-3xl font-bold text-gray-800">Website Content Management</h2></div>
+            {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
+            {error && <div className="p-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
+
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Homepage Content</h3>
+                 <div className="space-y-6">
+                    <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">'Why Choose Us' Section</legend>
+                        <div className="space-y-4">
+                            <div><label className="block text-sm font-medium">Main Title</label><input type="text" name="whyChooseTitle" value={content?.whyChooseTitle || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Subtitle</label><textarea name="whyChooseSubtitle" value={content?.whyChooseSubtitle || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                                <div><label className="block text-sm font-medium">Feature 1 Title</label><input type="text" name="feature1Title" value={content?.feature1Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 1 Text</label><input type="text" name="feature1Text" value={content?.feature1Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div><label className="block text-sm font-medium">Feature 2 Title</label><input type="text" name="feature2Title" value={content?.feature2Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 2 Text</label><input type="text" name="feature2Text" value={content?.feature2Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div><label className="block text-sm font-medium">Feature 3 Title</label><input type="text" name="feature3Title" value={content?.feature3Title || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                <div className="md:col-span-2"><label className="block text-sm font-medium">Feature 3 Text</label><input type="text" name="feature3Text" value={content?.feature3Text || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            </div>
+                        </div>
+                    </fieldset>
+                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">Contact & Location</legend>
+                        <div className="space-y-4">
+                            <div><label className="block text-sm font-medium">Hotline Number</label><input type="text" name="contactHotline" value={content?.contactHotline || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Email Address</label><input type="email" name="contactEmail" value={content?.contactEmail || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                            <div><label className="block text-sm font-medium">Physical Address</label><textarea name="contactAddress" value={content?.contactAddress || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" rows="2"></textarea></div>
+                            <div><label className="block text-sm font-medium">Google Maps Embed URL</label><input type="text" name="mapEmbedURL" value={content?.mapEmbedURL || ''} onChange={handleContentInputChange} className="mt-1 w-full p-2 border rounded-md" placeholder="Paste the src URL from Google Maps"/></div>
+                        </div>
+                    </fieldset>
+                    
+                    <fieldset className="border p-4 rounded-md">
+                        <legend className="font-semibold px-2">Showrooms / Branch Locations</legend>
+                        <div className="space-y-3">
+                            {(content?.showrooms || []).map((showroom, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-7 gap-3 p-3 bg-gray-50 rounded-md relative">
+                                    <input type="text" name="name" placeholder="Branch Name" value={showroom.name || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="text" name="address" placeholder="Full Address" value={showroom.address || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-2"/>
+                                    <input type="text" name="mapUrl" placeholder="Google Maps URL" value={showroom.mapUrl || ''} onChange={(e) => handleShowroomChange(index, e)} className="p-2 border rounded md:col-span-3"/>
+                                    <button type="button" onClick={() => removeShowroom(index)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full h-6 w-6 flex items-center justify-center">×</button>
+                                </div>
+                            ))}
+                        </div>
+                        <button type="button" onClick={addShowroom} className="mt-3 text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Add Showroom</button>
+                    </fieldset>
+
+                    <div className="flex justify-end">
+                       <button onClick={handleSaveGeneralContent} disabled={saving} className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:bg-gray-400">{saving ? 'Saving...' : 'Save Homepage Content'}</button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 className="text-xl font-bold text-gray-800">Manage Core Product Categories</h3>
+                    <button onClick={openAddCategoryModal} className="flex items-center bg-green-600 text-white px-3 py-1 rounded-md text-sm hover:bg-green-700"><PlusCircleIcon className="w-5 h-5 mr-1"/> Add Category</button>
+                </div>
+                <div className="space-y-4">
+                    {categories.map(category => (
+                        <div key={category.id} className="flex items-center p-2 border rounded-md bg-gray-50">
+                            <img src={category.imageUrl || 'https://placehold.co/80x80/EEE/31343C?text=No+Image'} alt={category.name} className="w-20 h-20 object-cover rounded-md mr-4"/>
+                            <div className="flex-grow">
+                                <p className="font-bold text-lg">{category.name}</p>
+                                <p className="text-sm text-gray-600">{category.description}</p>
+                            </div>
+                            <div className="flex space-x-2">
+                                <button onClick={() => openEditCategoryModal(category)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                <button onClick={() => handleDeleteCategory(category)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            
+            {categories.map(category => (
+                <div key={category.id} className="bg-white p-6 rounded-xl shadow-lg">
+                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 className="text-xl font-bold text-gray-800">Manage Products In: <span className="text-blue-600">{category.name}</span></h3>
+                        <button onClick={() => openAddModelModal(category)} className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-700"><PlusCircleIcon className="w-5 h-5 mr-1"/> Add Product</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead><tr className="bg-gray-50"><th className="px-4 py-2 text-left">Image</th><th className="px-4 py-2 text-left">Name</th><th className="px-4 py-2 text-left">Price (LKR)</th><th className="px-4 py-2 text-center">Actions</th></tr></thead>
+                            <tbody>
+                                {models[category.id]?.length > 0 ? models[category.id].map(model => (
+                                    <tr key={model.id} className="border-t">
+                                        <td className="px-4 py-2"><img src={model.imageUrl || 'https://placehold.co/64x64/EEE/31343C?text=No+Img'} alt={model.name} className="w-16 h-16 object-cover rounded"/></td>
+                                        <td className="px-4 py-2 font-semibold">{model.name}</td>
+                                        <td className="px-4 py-2">{model.price?.toFixed(2)}</td>
+                                        <td className="px-4 py-2 text-center">
+                                            <div className="flex justify-center space-x-2">
+                                                <button onClick={() => openEditModelModal(category, model)} className="text-blue-600 hover:text-blue-900"><PencilIcon/></button>
+                                                <button onClick={() => handleDeleteModel(category, model)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )) : <tr><td colSpan="4" className="text-center py-4 text-gray-500">No products added to this category yet.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+export default WebsiteManagementPortal;
