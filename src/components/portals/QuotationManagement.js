@@ -10,29 +10,14 @@ import {
   runTransaction,
   query,
   orderBy,
-  onSnapshot
+  onSnapshot,
+  writeBatch
 } from 'firebase/firestore';
 import Modal from '../ui/Modal';
 import CustomerManagement from './CustomerManagement';
 import SerialSelectorModal from '../ui/SerialSelectorModal';
 import { PlusCircleIcon, TrashIcon, DocumentTextIcon } from '../ui/Icons';
-import { generatePdf } from '../../utils/helpers';
-
-// --- Activity Logging Helper ---
-const logActivity = async (user, action, details = {}) => {
-    try {
-        await addDoc(collection(db, 'activity_logs'), {
-            timestamp: Timestamp.now(),
-            userId: user.uid,
-            userName: user.displayName || user.email,
-            action: action,
-            details: details 
-        });
-    } catch (error) {
-        console.error("Failed to log activity:", error);
-    }
-};
-
+import { generatePdf, logActivity } from '../../utils/helpers';
 
 // --- Pagination Component ---
 const Pagination = ({ nPages, currentPage, setCurrentPage }) => {
@@ -116,9 +101,10 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
         const customer = customers.find(c => c.id === quotation.customerId);
         const customerName = customer ? customer.name.toLowerCase() : '';
         const quotationId = quotation.id.toLowerCase();
+        const invoiceId = quotation.invoiceId ? quotation.invoiceId.toLowerCase() : '';
         const lowercasedSearchTerm = searchTerm.toLowerCase();
 
-        return customerName.includes(lowercasedSearchTerm) || quotationId.includes(lowercasedSearchTerm);
+        return customerName.includes(lowercasedSearchTerm) || quotationId.includes(lowercasedSearchTerm) || invoiceId.includes(lowercasedSearchTerm);
     });
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -259,14 +245,35 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     const handleGenerateQuotation = (quotationData, action) => { if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === quotationData.customerId); generatePdf(quotationData, 'quotation', letterheadBase64, customer, action); };
     const resetForm = () => { setSelectedCustomerId(''); setQuotationItems([]); setProductType('stock'); setSelectedProductId(''); setSelectedProductQty(1); setDiscount(0); };
     
-    const handleDeleteQuotation = async (quotationId) => {
-        if (window.confirm("Are you sure you want to delete this quotation?")) {
+    const handleDeleteQuotation = async (quotation) => {
+        const isSuperAdmin = currentUser.role === 'super_admin';
+        if (!isSuperAdmin) {
+            alert("You do not have permission to delete quotations.");
+            return;
+        }
+
+        let confirmMessage = `Are you sure you want to permanently delete Quotation #${quotation.id}? This action cannot be undone.`;
+        if (quotation.invoiceId) {
+            confirmMessage = `Are you sure you want to permanently delete Quotation #${quotation.id} AND its corresponding Invoice #${quotation.invoiceId}? This is a permanent action and will NOT restock items.`;
+        }
+
+        if (window.confirm(confirmMessage)) {
             try {
-                await deleteDoc(doc(db, 'quotations', quotationId));
+                const batch = writeBatch(db);
+                const quotationRef = doc(db, 'quotations', quotation.id);
+                batch.delete(quotationRef);
+
+                if (quotation.invoiceId) {
+                    const invoiceRef = doc(db, 'invoices', quotation.invoiceId);
+                    batch.delete(invoiceRef);
+                }
+                
+                await batch.commit();
+
                 await logActivity(
                     currentUser,
-                    'Deleted Quotation',
-                    { quotationId: quotationId }
+                    'Permanently Deleted Quotation',
+                    { quotationId: quotation.id, invoiceId: quotation.invoiceId || null }
                 );
             } catch (err) {
                 console.error("Error deleting quotation:", err);
@@ -283,7 +290,6 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                 await runTransaction(db, async (transaction) => {
                     const quotationRef = doc(db, 'quotations', quotation.id);
     
-                    // --- PHASE 1: ALL READS ---
                     const quotationDoc = await transaction.get(quotationRef);
                     if (!quotationDoc.exists() || quotationDoc.data().status !== 'draft') {
                         throw new Error("Quotation is already processed or does not exist.");
@@ -313,7 +319,6 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                         stockReads.get(key).doc = docSnap;
                     });
     
-                    // --- PHASE 2: ALL WRITES ---
                     for (const item of quotation.items) {
                         if (item.type === 'stock') {
                             const stockData = stockReads.get(item.id);
@@ -343,7 +348,7 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     
                     const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id };
                     transaction.set(newInvoiceRef, invoiceData);
-                    transaction.update(quotationRef, { status: 'invoiced' });
+                    transaction.update(quotationRef, { status: 'invoiced', invoiceId: newInvoiceRef.id });
                 });
 
                 await logActivity(
@@ -406,7 +411,7 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                 <div className="p-4 border-b">
                      <input
                         type="text"
-                        placeholder="Search by Quotation ID or Customer Name..."
+                        placeholder="Search by Quotation ID, Invoice ID or Customer Name..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -415,7 +420,13 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
                         <thead className="bg-gray-100"><tr>
-                            <th className="px-4 py-2 text-left">Quotation ID</th><th className="px-4 py-2 text-left">Customer</th><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-right">Total</th><th className="px-4 py-2 text-center">Status</th><th className="px-4 py-2 text-center">Actions</th>
+                            <th className="px-4 py-2 text-left">Quotation ID</th>
+                            <th className="px-4 py-2 text-left">Invoice ID</th>
+                            <th className="px-4 py-2 text-left">Customer</th>
+                            <th className="px-4 py-2 text-left">Date</th>
+                            <th className="px-4 py-2 text-right">Total</th>
+                            <th className="px-4 py-2 text-center">Status</th>
+                            <th className="px-4 py-2 text-center">Actions</th>
                         </tr></thead>
                         <tbody>
                             {currentRecords.map(q => {
@@ -424,17 +435,18 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                                 return (
                                 <tr key={q.id} className="border-b">
                                     <td className="px-4 py-2 font-mono text-sm">{q.id}</td>
+                                    <td className="px-4 py-2 font-mono text-sm">{q.invoiceId || 'N/A'}</td>
                                     <td className="px-4 py-2">{customer?.name || 'N/A'}</td>
                                     <td className="px-4 py-2 text-sm">{q.createdAt.toDate().toLocaleDateString()}</td>
                                     <td className="px-4 py-2 text-right font-semibold">{q.total.toFixed(2)}</td>
                                     <td className="px-4 py-2 text-center"><span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColor}`}>{q.status}</span></td>
                                     <td className="px-4 py-2 text-center">
-                                        <div className="flex justify-center space-x-2">
+                                        <div className="flex justify-center items-center space-x-2">
                                             {q.status === 'draft' && (
                                                 <button onClick={() => handleConvertToInvoice(q)} disabled={isSaving} className="text-blue-600 hover:text-blue-900 disabled:text-gray-400 text-sm font-medium">Invoice</button>
                                             )}
                                             <button onClick={() => handleGenerateQuotation(q, 'view')} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>
-                                            <button onClick={() => handleDeleteQuotation(q.id)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>
+                                            {currentUser.role === 'super_admin' && (<button onClick={() => handleDeleteQuotation(q)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>)}
                                         </div>
                                     </td>
                                 </tr>

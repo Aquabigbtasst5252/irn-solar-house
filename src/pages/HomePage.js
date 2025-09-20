@@ -1,31 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../components/ui/Icons';
 
-const HomePage = ({ content, categories }) => {
+const HomePage = ({ content, categories, featuredImages }) => {
     // --- State for Advertisement Slider ---
-    const adImages = ['/2.png', '/3.png']; // Updated image list
     const [currentAdIndex, setCurrentAdIndex] = useState(0);
-    
+    const adImages = featuredImages || [];
+
+    useEffect(() => {
+        if (adImages.length > 1) {
+            const adTimer = setInterval(() => {
+                setCurrentAdIndex(prevIndex => (prevIndex + 1) % adImages.length);
+            }, 5000);
+            return () => clearInterval(adTimer);
+        }
+    }, [adImages.length]);
+
     // --- State for Responsive Video ---
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => {
-        const adTimer = setInterval(() => {
-            setCurrentAdIndex(prevIndex => (prevIndex + 1) % adImages.length);
-        }, 5000); // Change ad image every 5 seconds
-
         const handleResize = () => {
             setIsMobile(window.innerWidth < 768);
         };
 
         window.addEventListener('resize', handleResize);
-
-        // Cleanup timers and event listeners
-        return () => {
-            clearInterval(adTimer);
-            window.removeEventListener('resize', handleResize);
-        };
-    }, [adImages.length]);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const defaultContent = {
         whyChooseTitle: "Why Choose IRN Solar House?",
@@ -63,6 +63,7 @@ const HomePage = ({ content, categories }) => {
                     </a>
                     <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
                         <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
+                        <a href="#featured" className="hover:text-yellow-600 transition-colors">Featured</a>
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#showrooms" className="hover:text-yellow-600 transition-colors">Showrooms</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
@@ -75,7 +76,7 @@ const HomePage = ({ content, categories }) => {
 
             <section className="relative h-screen w-full flex items-center justify-center text-white overflow-hidden">
                 <video 
-                    key={isMobile ? 'mobile' : 'desktop'} // Key forces re-render when switching between videos
+                    key={isMobile ? 'mobile' : 'desktop'}
                     autoPlay 
                     loop 
                     muted 
@@ -88,7 +89,6 @@ const HomePage = ({ content, categories }) => {
                     />
                     Your browser does not support the video tag.
                 </video>
-                
             </section>
             
             <section id="about" className="py-16 sm:py-24 bg-white">
@@ -103,15 +103,15 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
 
-            <section className="py-16 sm:py-24 bg-gray-100">
+            <section id="featured" className="py-16 sm:py-24 bg-gray-100">
                 <div className="container mx-auto px-6">
                     <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Featured Products</h2>
                     <div className="relative w-full max-w-5xl mx-auto">
                         <div className="grid bg-white rounded-2xl overflow-hidden shadow-2xl p-4">
                             {adImages.map((image, index) => (
                                 <img
-                                    key={`ad-${image}`}
-                                    src={image}
+                                    key={`ad-${image.id}`}
+                                    src={image.imageUrl}
                                     alt={`Advertisement ${index + 1}`}
                                     className={`w-full h-auto object-contain transition-opacity duration-1000 ease-in-out col-start-1 row-start-1 ${index === currentAdIndex ? 'opacity-100' : 'opacity-0'}`}
                                 />
@@ -202,7 +202,11 @@ const HomePage = ({ content, categories }) => {
                 </div>
             </section>
             
-            <footer className="bg-gray-900 text-white py-6"><div className="container mx-auto px-6 text-center text-sm text-gray-400"><p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved.</p></div></footer>
+            <footer className="bg-gray-900 text-white py-6">
+                <div className="container mx-auto px-6 text-center text-sm text-gray-400">
+                    <p>© {new Date().getFullYear()} IRN Solar House. All Rights Reserved. | <a href="#/privacy" className="hover:text-yellow-400 underline">Privacy Policy</a></p>
+                </div>
+            </footer>
         </div>
     );
 };

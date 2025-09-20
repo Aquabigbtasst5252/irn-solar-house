@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../services/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { PlusCircleIcon, DocumentTextIcon } from '../ui/Icons';
-import { generatePdf } from '../../utils/helpers';
+import { collection, getDocs, query, orderBy, doc, deleteDoc, runTransaction, updateDoc } from 'firebase/firestore';
+import { PlusCircleIcon, DocumentTextIcon, TrashIcon, CashIcon } from '../ui/Icons';
+import { generatePdf, logActivity } from '../../utils/helpers';
 
 // --- Pagination Component ---
 const Pagination = ({ nPages, currentPage, setCurrentPage }) => {
@@ -59,8 +59,8 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
     const [error, setError] = useState('');
     const [letterheadBase64, setLetterheadBase64] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    // --- Pagination State ---
     const [currentPage, setCurrentPage] = useState(1);
     const [recordsPerPage] = useState(20);
 
@@ -68,12 +68,12 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
         const customer = customers.find(c => c.id === invoice.customerId);
         const customerName = customer ? customer.name.toLowerCase() : '';
         const invoiceId = invoice.id.toLowerCase();
+        const quotationId = invoice.quotationId ? invoice.quotationId.toLowerCase() : '';
         const lowercasedSearchTerm = searchTerm.toLowerCase();
 
-        return customerName.includes(lowercasedSearchTerm) || invoiceId.includes(lowercasedSearchTerm);
+        return customerName.includes(lowercasedSearchTerm) || invoiceId.includes(lowercasedSearchTerm) || quotationId.includes(lowercasedSearchTerm);
     });
 
-    // --- Pagination Logic ---
     const indexOfLastRecord = currentPage * recordsPerPage;
     const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
     const currentRecords = filteredInvoices.slice(indexOfFirstRecord, indexOfLastRecord);
@@ -113,6 +113,94 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleMarkAsPaid = async (invoiceId) => {
+        if (window.confirm(`Are you sure you want to mark Invoice #${invoiceId} as paid?`)) {
+            setIsProcessing(true);
+            try {
+                const invoiceRef = doc(db, 'invoices', invoiceId);
+                await updateDoc(invoiceRef, { status: 'paid' });
+                await logActivity(currentUser, 'Marked Invoice as Paid', { invoiceId });
+                fetchData(); // Refresh the list
+            } catch (err) {
+                console.error("Error marking invoice as paid:", err);
+                alert("Failed to update invoice status.");
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+    };
+
+    const handleDeleteInvoice = async (invoiceId) => {
+        if (currentUser.role !== 'super_admin') {
+            alert("You do not have permission to delete invoices.");
+            return;
+        }
+        if (window.confirm(`Are you sure you want to permanently delete Invoice #${invoiceId}? This action CANNOT be undone and will NOT restock items.`)) {
+            setIsProcessing(true);
+            try {
+                await deleteDoc(doc(db, 'invoices', invoiceId));
+                await logActivity(currentUser, 'Deleted Invoice', { invoiceId });
+                fetchData(); // Refresh the list
+            } catch (err) {
+                console.error("Error deleting invoice:", err);
+                alert("Failed to delete invoice.");
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+    };
+
+    const handleCancelInvoice = async (invoice) => {
+        if (window.confirm(`Are you sure you want to cancel Invoice #${invoice.id}? This will restock all associated items.`)) {
+            setIsProcessing(true);
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const invoiceRef = doc(db, 'invoices', invoice.id);
+                    const quotationRef = doc(db, 'quotations', invoice.quotationId);
+
+                    // Revert stock for all items
+                    for (const item of invoice.items) {
+                        if (item.type === 'stock') {
+                            const stockDocRef = doc(db, 'import_stock', item.id);
+                            const stockDoc = await transaction.get(stockDocRef);
+                            if (stockDoc.exists()) {
+                                const currentQty = stockDoc.data().qty || 0;
+                                transaction.update(stockDocRef, { qty: currentQty + item.qty });
+                            }
+                            if (item.serials) {
+                                for (const serialId of item.serials) {
+                                    const serialRef = doc(db, 'import_stock', item.id, 'serials', serialId);
+                                    transaction.update(serialRef, { assignedShopId: '' }); // Un-assign
+                                }
+                            }
+                        } else if (item.type === 'finished' && item.components) {
+                            for (const component of item.components) {
+                                const componentStockRef = doc(db, 'import_stock', component.stockItemId);
+                                const componentStockDoc = await transaction.get(componentStockRef);
+                                if (componentStockDoc.exists()) {
+                                    const totalQtyToRestock = component.qty * item.qty;
+                                    const currentQty = componentStockDoc.data().qty || 0;
+                                    transaction.update(componentStockRef, { qty: currentQty + totalQtyToRestock });
+                                }
+                            }
+                        }
+                    }
+
+                    // Update statuses
+                    transaction.update(invoiceRef, { status: 'cancelled' });
+                    transaction.update(quotationRef, { status: 'draft', invoiceId: null });
+                });
+                await logActivity(currentUser, 'Cancelled Invoice', { invoiceId: invoice.id, quotationId: invoice.quotationId });
+                fetchData(); // Refresh list
+            } catch (err) {
+                console.error("Error cancelling invoice:", err);
+                alert("Failed to cancel invoice. Stock was not restocked.");
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+    };
     
     const exportToPDF = (invoice, action) => {
         if (!letterheadBase64) {
@@ -121,6 +209,15 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
         }
         const customer = customers.find(c => c.id === invoice.customerId);
         generatePdf(invoice, 'invoice', letterheadBase64, customer, action);
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'unpaid': return 'bg-yellow-100 text-yellow-800';
+            case 'paid': return 'bg-green-100 text-green-800';
+            case 'cancelled': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
     };
 
     if (loading) return <div className="p-8 text-center">Loading Invoices...</div>;
@@ -138,7 +235,7 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                 <div className="p-4 border-b">
                     <input
                         type="text"
-                        placeholder="Search by Invoice # or Customer Name..."
+                        placeholder="Search by Invoice #, Quotation # or Customer Name..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -148,10 +245,11 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                     <thead>
                         <tr className="bg-gray-100">
                             <th className="px-5 py-3 text-left">Invoice #</th>
+                            <th className="px-5 py-3 text-left">Quotation #</th>
                             <th className="px-5 py-3 text-left">Customer</th>
                             <th className="px-5 py-3 text-left">Date</th>
                             <th className="px-5 py-3 text-left">Total (LKR)</th>
-                            <th className="px-5 py-3 text-left">Warranty End</th>
+                            <th className="px-5 py-3 text-center">Status</th>
                             <th className="px-5 py-3 text-center">Actions</th>
                         </tr>
                     </thead>
@@ -160,13 +258,29 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                              const customer = customers.find(c => c.id === invoice.customerId);
                              return (
                                 <tr key={invoice.id} className="border-b hover:bg-gray-50">
-                                    <td className="px-5 py-4 font-mono">{invoice.id}</td>
+                                    <td className="px-5 py-4 font-mono text-sm">{invoice.id}</td>
+                                    <td className="px-5 py-4 font-mono text-sm">{invoice.quotationId || 'N/A'}</td>
                                     <td className="px-5 py-4">{customer?.name || 'N/A'}</td>
                                     <td className="px-5 py-4 text-sm">{invoice.createdAt.toDate().toLocaleDateString()}</td>
                                     <td className="px-5 py-4 font-semibold">{invoice.total.toFixed(2)}</td>
-                                    <td className="px-5 py-4 text-sm">{invoice.warrantyEndDate || 'N/A'}</td>
                                     <td className="px-5 py-4 text-center">
-                                        <button onClick={() => exportToPDF(invoice, 'view')} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon /></button>
+                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(invoice.status)}`}>
+                                            {invoice.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-4 text-center">
+                                        <div className="flex justify-center items-center space-x-3">
+                                            <button onClick={() => exportToPDF(invoice, 'view')} className="text-gray-600 hover:text-gray-900" title="View PDF"><DocumentTextIcon /></button>
+                                            {invoice.status === 'unpaid' && (
+                                                <button onClick={() => handleMarkAsPaid(invoice.id)} disabled={isProcessing} className="text-green-600 hover:text-green-900 disabled:text-gray-400" title="Mark as Paid"><CashIcon /></button>
+                                            )}
+                                            {invoice.status !== 'cancelled' && (
+                                                <button onClick={() => handleCancelInvoice(invoice)} disabled={isProcessing} className="text-yellow-600 hover:text-yellow-900 disabled:text-gray-400 text-sm font-medium">Cancel</button>
+                                            )}
+                                            {currentUser.role === 'super_admin' && (
+                                                <button onClick={() => handleDeleteInvoice(invoice.id)} disabled={isProcessing} className="text-red-600 hover:text-red-900 disabled:text-gray-400" title="Delete"><TrashIcon /></button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             );

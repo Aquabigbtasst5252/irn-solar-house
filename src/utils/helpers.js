@@ -1,7 +1,22 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { db } from '../services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, Timestamp } from 'firebase/firestore';
+
+// --- NEW Centralized Activity Logging Helper ---
+export const logActivity = async (user, action, details = {}) => {
+    try {
+        await addDoc(collection(db, 'activity_logs'), {
+            timestamp: Timestamp.now(),
+            userId: user.uid,
+            userName: user.displayName || user.email,
+            action: action,
+            details: details 
+        });
+    } catch (error) {
+        console.error("Failed to log activity:", error);
+    }
+};
 
 export const getUserProfile = async (uid) => {
   if (!db) return null;
@@ -43,30 +58,27 @@ const numberToWords = (num) => {
         words += convertHundreds(num);
     }
     
-    // Capitalize first letter and add suffix
     return (words.charAt(0).toUpperCase() + words.slice(1)).trim() + ' Rupees Only.';
 };
 
 
 export const generatePdf = async (docData, type, letterheadBase64, customer, action = 'download') => {
-    // Fetch PDF settings from Firestore
     let settings = {};
     try {
-        const settingsDocRef = doc(db, 'settings', 'pdfSetup');
+        const docId = `pdf_${type}`; 
+        const settingsDocRef = doc(db, 'settings', docId);
         const settingsSnap = await getDoc(settingsDocRef);
         if (settingsSnap.exists()) {
             settings = settingsSnap.data();
         }
     } catch (error) {
-        console.error("Could not fetch PDF settings, using defaults.", error);
+        console.error(`Could not fetch PDF settings for ${type}, using defaults.`, error);
     }
 
-    // Use fetched settings or fall back to defaults
     const marginLeft = settings.marginLeft || 20;
     const marginRight = settings.marginRight || 20;
-    // --- CUSTOM MARGINS ---
-    const marginTop = 88; // 8.8cm
-    const marginBottom = 35; // 3.5cm
+    const marginTop = settings.marginTop || 88;
+    const marginBottom = settings.marginBottom || 35;
     const pageHeight = 297;
     const footerY = pageHeight - marginBottom;
 
@@ -82,7 +94,7 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
     if (letterheadBase64) {
         const imgWidth = docPDF.internal.pageSize.getWidth();
         const imgHeight = docPDF.internal.pageSize.getHeight();
-        docPDF.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+        docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
     }
 
     const title = type === 'invoice' ? invoiceTitle : quotationTitle;
@@ -132,7 +144,7 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
                 if (letterheadBase64) {
                     const imgWidth = docPDF.internal.pageSize.getWidth();
                     const imgHeight = docPDF.internal.pageSize.getHeight();
-                    docPDF.addImage(letterheadBase64, 'PNG', 0, 0, imgWidth, imgHeight);
+                    docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
                 }
                 docPDF.setFontSize(titleFontSize);
                 docPDF.setFont(fontType, 'bold');
@@ -168,15 +180,14 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
     docPDF.text(`Grand Total:`, totalsX, finalY + 24);
     docPDF.text(`LKR ${docData.total.toFixed(2)}`, totalsValueX, finalY + 24, { align: 'right' });
     
-    finalY += 30; // Add some space
+    finalY += 30;
 
-    // --- Add Total in Words and Bank Details for INVOICE ONLY ---
     if (type === 'invoice') {
         docPDF.setFontSize(bodyFontSize - 1);
         docPDF.setFont(fontType, 'italic');
         docPDF.text(`In Words: ${numberToWords(docData.total)}`, marginLeft, finalY);
         
-        finalY += 10; // Add space
+        finalY += 10;
 
         docPDF.setFontSize(bodyFontSize);
         docPDF.setFont(fontType, 'bold');
@@ -206,7 +217,6 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
         docPDF.text(`Expires On: ${docData.warrantyEndDate}`, marginLeft, finalY + 10);
     }
     
-    // Always trigger a download
     docPDF.save(`${title}-${docData.id}.pdf`);
 };
 

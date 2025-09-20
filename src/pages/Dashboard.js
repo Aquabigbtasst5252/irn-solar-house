@@ -13,7 +13,10 @@ import ExportPortal from '../components/portals/ExportPortal';
 import SupplierManagement from '../components/portals/SupplierManagement';
 import WebsiteManagementPortal from '../components/portals/WebsiteManagement';
 import PdfSettings from '../components/portals/PdfSettings';
-import FinancialReport from '../components/portals/FinancialReport'; // Import the new component
+import FinancialReport from '../components/portals/FinancialReport';
+import ActivityLog from '../components/portals/ActivityLog';
+import WarrantyClaim from '../components/portals/WarrantyClaim';
+import Documentation from '../components/portals/Documentation'; // Import the new component
 
 const Dashboard = ({ user, onSignOut }) => {
     const [currentView, setCurrentView] = useState('');
@@ -77,7 +80,10 @@ const Dashboard = ({ user, onSignOut }) => {
             case 'user_management': return <UserManagementPortal currentUser={user} />;
             case 'website_management': return <WebsiteManagementPortal currentUser={user} />;
             case 'pdf_settings': return <PdfSettings />;
-            case 'financial_report': return <FinancialReport />; // Add case for the new component
+            case 'financial_report': return <FinancialReport />;
+            case 'activity_log': return <ActivityLog />;
+            case 'warranty_claim': return <WarrantyClaim currentUser={user} />;
+            case 'documentation': return <Documentation />; // Add case for the new component
             default: return <ImportDashboard />;
         }
     };
@@ -115,12 +121,15 @@ const Dashboard = ({ user, onSignOut }) => {
                         {hasExportAccess && (<div className="relative" ref={exportDropdownRef}><button onClick={() => setExportDropdownOpen(!exportDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('export_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Export <ChevronDownIcon className="ml-1" /></button>
                             {exportDropdownOpen && <div className="absolute left-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-50"><NavLink view="export_dashboard">Export Dashboard</NavLink><NavLink view="export_customer_management">Customer Management</NavLink></div>}
                         </div>)}
-                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') || currentView.startsWith('website_') || currentView.startsWith('pdf_') || currentView.startsWith('financial_') ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
+                        {hasAdminAccess && (<div className="relative" ref={adminDropdownRef}><button onClick={() => setAdminDropdownOpen(!adminDropdownOpen)} className={`py-3 px-4 text-sm font-medium flex items-center ${currentView.startsWith('user_') || currentView.startsWith('website_') || currentView.startsWith('pdf_') || currentView.startsWith('financial_') || currentView.startsWith('activity_') || currentView.startsWith('warranty_') || currentView === 'documentation' ? 'text-blue-600' : 'text-gray-600 hover:text-blue-600'}`}>Admin Tools <ChevronDownIcon className="ml-1" /></button>
                             {adminDropdownOpen && <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
                                 <NavLink view="user_management">User Management</NavLink>
                                 <NavLink view="website_management">Website Content</NavLink>
                                 <NavLink view="pdf_settings">PDF Page Setup</NavLink>
                                 <NavLink view="financial_report">Financial Report</NavLink> 
+                                <NavLink view="activity_log">Activity Log</NavLink> 
+                                <NavLink view="warranty_claim">Warranty Claim</NavLink> 
+                                <NavLink view="documentation">Documentation</NavLink> 
                                 </div>}
                         </div>)}
                     </nav>

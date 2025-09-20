@@ -2,112 +2,124 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, getDoc, collection, getDocs, query } from 'firebase/firestore';
-
-// Assuming firebase.js is in src/services/
-import { db, auth } from './services/firebase'; 
-import { getUserProfile } from './utils/helpers';
-
-// Import Pages
-import HomePage from './pages/HomePage';
-import ProductCategoryPage from './pages/ProductCategoryPage';
-import Dashboard from './pages/Dashboard';
 import SignIn from './components/auth/SignIn';
 import ForgotPassword from './components/auth/ForgotPassword';
+import Dashboard from './pages/Dashboard';
+import HomePage from './pages/HomePage';
+import ProductCategoryPage from './pages/ProductCategoryPage';
+import PrivacyPolicy from './pages/PrivacyPolicy'; // Import the new component
+
+// --- Firebase Initialization ---
+// This should be outside the component to avoid re-initialization on re-renders
+let db, auth;
+try {
+    const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
+    const firebaseConfig = JSON.parse(firebaseConfigString);
+    const firebaseApp = initializeApp(firebaseConfig);
+    auth = getAuth(firebaseApp);
+    db = getFirestore(firebaseApp);
+} catch (error) {
+    console.error("Error initializing Firebase:", error);
+}
+
+const getUserProfile = async (uid) => {
+    if (!db) return null;
+    const userDocRef = doc(db, 'users', uid);
+    const userDocSnap = await getDoc(userDocRef);
+    return userDocSnap.exists() ? userDocSnap.data() : null;
+};
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('homepage');
-  const [loading, setLoading] = useState(true);
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const [homepageContent, setHomepageContent] = useState(null);
-  const [productCategories, setProductCategories] = useState([]);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [homepageContent, setHomepageContent] = useState(null);
+    const [productCategories, setProductCategories] = useState([]);
+    const [featuredImages, setFeaturedImages] = useState([]);
+    
+    // --- Hash-based Routing State ---
+    const [route, setRoute] = useState(window.location.hash);
 
-  // --- NEW: Hash-based Routing Effect ---
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#/products/')) {
-        const categoryId = hash.replace('#/products/', '');
-        setSelectedCategoryId(categoryId);
-        setView('product-category');
-      } else if (hash === '#/signin') {
-        setView('signin');
-      } else {
-        setView('homepage');
-        setSelectedCategoryId(null);
-      }
+    useEffect(() => {
+        const handleHashChange = () => {
+            setRoute(window.location.hash);
+        };
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
+
+    useEffect(() => {
+        const fetchPublicData = async () => {
+            try {
+                const contentDocRef = doc(db, 'website_content', 'homepage');
+                const contentSnap = await getDoc(contentDocRef);
+                if (contentSnap.exists()) {
+                    setHomepageContent(contentSnap.data());
+                }
+
+                const categoriesQuery = query(collection(db, 'product_categories'));
+                const categoriesSnap = await getDocs(categoriesQuery);
+                setProductCategories(categoriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                const featuredImagesQuery = query(collection(db, 'featured_products'));
+                const featuredImagesSnap = await getDocs(featuredImagesQuery);
+                setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            } catch (error) {
+                console.error("Could not fetch public website data:", error);
+            }
+        };
+        fetchPublicData();
+    }, []);
+
+    useEffect(() => {
+        if (!auth) { setLoading(false); return; }
+        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+            if (authUser) {
+                const userProfile = await getUserProfile(authUser.uid);
+                setUser({ ...authUser, ...userProfile });
+            } else {
+                setUser(null);
+            }
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleSignOut = async () => {
+        try { await signOut(auth); window.location.hash = '#/'; } catch (error) { console.error("Error signing out: ", error); }
     };
 
-    // Listen for hash changes
-    window.addEventListener('hashchange', handleHashChange);
-    
-    // Handle initial page load
-    handleHashChange();
+    const handleLoginSuccess = (userProfile) => {
+        setUser({ ...auth.currentUser, ...userProfile });
+    };
 
-    // Cleanup listener
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-
-  // Fetch all public data
-  useEffect(() => {
-    const fetchPublicData = async () => {
-        try {
-            const contentDocRef = doc(db, 'website_content', 'homepage');
-            const contentSnap = await getDoc(contentDocRef);
-            if (contentSnap.exists()) {
-                setHomepageContent(contentSnap.data());
-            }
-
-            const categoriesQuery = query(collection(db, 'product_categories'));
-            const categoriesSnap = await getDocs(categoriesQuery);
-            setProductCategories(categoriesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-
-        } catch (error) {
-            console.error("Could not fetch public website data:", error);
+    const renderContent = () => {
+        if (loading) {
+            return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>);
+        }
+        if (user) {
+            return <Dashboard user={user} onSignOut={handleSignOut} />;
+        }
+        
+        // --- Routing Logic ---
+        if (route.startsWith('#/products/')) {
+            const categoryId = route.split('/')[2];
+            return <ProductCategoryPage categoryId={categoryId} />;
+        }
+        
+        switch(route) {
+            case '#/signin':
+                return <SignIn setView={(hash) => window.location.hash = hash} onLoginSuccess={handleLoginSuccess} />;
+            case '#/forgot-password':
+                return <ForgotPassword setView={(hash) => window.location.hash = hash} />;
+            case '#/privacy': // Add the new route
+                return <PrivacyPolicy />;
+            case '#/':
+            default:
+                return <HomePage content={homepageContent} categories={productCategories} featuredImages={featuredImages} />;
         }
     };
-    fetchPublicData();
-  }, []);
 
-  // Auth state listener
-  useEffect(() => {
-    if (!auth) { setLoading(false); return; }
-    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (authUser) {
-        const userProfile = await getUserProfile(authUser.uid);
-        setUser({ ...authUser, ...userProfile });
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleSignOut = async () => { try { await signOut(auth); window.location.hash = '/'; } catch (error) { console.error("Error signing out: ", error); } };
-  const handleLoginSuccess = (userProfile) => { setUser({ ...auth.currentUser, ...userProfile }); };
-
-  const renderContent = () => {
-      if (loading) { return (<div className="min-h-screen flex items-center justify-center"><div className="text-xl">Loading...</div></div>); }
-      
-      // If user is logged in, always show the dashboard
-      if (user) { return <Dashboard user={user} onSignOut={handleSignOut} />; }
-      
-      // Otherwise, show public pages based on the view state (controlled by URL hash)
-      switch(view) {
-          case 'signin': 
-            return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><SignIn setView={(v) => window.location.hash = v} onLoginSuccess={handleLoginSuccess} /></div>;
-          case 'forgot-password': 
-            return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4"><ForgotPassword setView={(v) => window.location.hash = v} /></div>;
-          case 'product-category':
-            return <ProductCategoryPage categoryId={selectedCategoryId} />;
-          case 'homepage': 
-          default: 
-            return <HomePage content={homepageContent} categories={productCategories} />;
-      }
-  };
-
-  return (<div className="font-sans">{renderContent()}</div>);
+    return (<div className="font-sans">{renderContent()}</div>);
 }
 

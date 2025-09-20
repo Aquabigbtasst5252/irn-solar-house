@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../../services/firebase';
 import { collection, getDocs, doc, addDoc, updateDoc, deleteDoc, query, orderBy, Timestamp, getDoc } from 'firebase/firestore';
-import ReactDOM from 'react-dom/client';
-import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import Modal from '../ui/Modal';
 import { PencilIcon, TrashIcon, PlusCircleIcon, DocumentTextIcon } from '../ui/Icons';
-import PrintableCostSheet from '../ui/PrintableCostSheet';
 
 const ProductManagement = ({ currentUser }) => {
     const [view, setView] = useState('list');
@@ -146,49 +144,113 @@ const ProductManagement = ({ currentUser }) => {
             return;
         }
 
-        // Fetch PDF settings before rendering
-        let pdfSettings = {};
+        let settings = {};
         try {
-            const settingsDocRef = doc(db, 'settings', 'pdfSetup');
+            const settingsDocRef = doc(db, 'settings', 'pdf_cost_sheet');
             const settingsSnap = await getDoc(settingsDocRef);
             if (settingsSnap.exists()) {
-                pdfSettings = settingsSnap.data();
+                settings = settingsSnap.data();
             }
         } catch (error) {
             console.error("Could not fetch PDF settings for cost sheet.", error);
         }
 
-        const printableElement = document.createElement('div');
-        document.body.appendChild(printableElement);
-        const root = ReactDOM.createRoot(printableElement);
+        const docPDF = new jsPDF();
+        const {
+            marginLeft = 20, marginRight = 20, marginTop = 88, marginBottom = 35,
+            titleFontSize = 22, bodyFontSize = 10, fontType = 'helvetica',
+            costSheetTitle = 'Cost Sheet', footerText = 'Internal Document'
+        } = settings;
 
-        // Pass the fetched settings as a prop
-        root.render(<PrintableCostSheet product={product} letterheadBase64={letterheadBase64} settings={pdfSettings} />);
+        const pageHeight = 297;
+        const footerY = pageHeight - marginBottom;
 
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        try {
-            const sheetElement = printableElement.querySelector('div');
-            const canvas = await html2canvas(sheetElement, { 
-                scale: 2,
-                useCORS: true 
+        const addHeaderFooter = (data) => {
+            if (letterheadBase64) {
+                const imgWidth = docPDF.internal.pageSize.getWidth();
+                const imgHeight = docPDF.internal.pageSize.getHeight();
+                docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+            }
+            docPDF.setFontSize(titleFontSize);
+            docPDF.setFont(fontType, 'bold');
+            docPDF.text(costSheetTitle, 105, marginTop, { align: 'center' });
+
+            const pageCount = docPDF.internal.getNumberOfPages();
+            docPDF.setFontSize(bodyFontSize - 2);
+            docPDF.text(footerText, 105, footerY + 5, { align: 'center' });
+            docPDF.text(`Page ${data.pageNumber} of ${pageCount}`, 210 - marginRight, footerY + 10, { align: 'right' });
+        };
+
+        // Initial Header
+        addHeaderFooter({ pageNumber: 1 });
+
+        docPDF.setFontSize(bodyFontSize);
+        docPDF.setFont(fontType, 'normal');
+        docPDF.text(`Product Name: ${product.name}`, marginLeft, marginTop + 15);
+        docPDF.text(`Serial Number: ${product.serialNumber}`, marginLeft, marginTop + 20);
+        docPDF.text(`Date Exported: ${new Date().toLocaleDateString()}`, 210 - marginRight, marginTop + 15, { align: 'right' });
+
+        // Required Items Table
+        const requiredItemsRows = product.items.map(item => [
+            item.name,
+            item.qty,
+            (item.cost || 0).toFixed(2),
+            ((item.qty || 0) * (item.cost || 0)).toFixed(2)
+        ]);
+
+        autoTable(docPDF, {
+            startY: marginTop + 30,
+            head: [['Item Name', 'Qty', 'Unit Cost (LKR)', 'Total Cost (LKR)']],
+            body: requiredItemsRows,
+            foot: [[
+                { content: 'Raw Material Total:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                { content: product.rawMaterialCost.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }
+            ]],
+            theme: 'striped',
+            headStyles: { fillColor: [22, 160, 133] },
+            styles: { font: fontType, fontSize: bodyFontSize - 1 },
+            margin: { left: marginLeft, right: marginRight },
+            didDrawPage: addHeaderFooter
+        });
+
+        // Cost Breakdown Table
+        const breakdownRows = Object.entries(product.costBreakdown)
+            .filter(([key]) => !['rawMaterialCost', 'totalCost', 'profit'].includes(key))
+            .map(([key, value]) => {
+                const name = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                return [`${name} (${product.costing[key]}%)`, value.toFixed(2)];
             });
 
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
+        autoTable(docPDF, {
+            startY: docPDF.lastAutoTable.finalY + 10,
+            head: [['Cost Component', 'Amount (LKR)']],
+            body: breakdownRows,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185] },
+            styles: { font: fontType, fontSize: bodyFontSize - 1 },
+            margin: { left: marginLeft, right: marginRight },
+            didDrawPage: addHeaderFooter
+        });
 
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`CostSheet-${product.serialNumber}.pdf`);
+        // Final Summary
+        let finalY = docPDF.lastAutoTable.finalY;
+        const summaryX = 130;
+        const summaryValueX = 210 - marginRight;
+        
+        docPDF.setFontSize(bodyFontSize);
+        docPDF.setFont(fontType, 'bold');
+        
+        docPDF.text('Total Production Cost:', summaryX, finalY += 10, {align: 'right'});
+        docPDF.text(`LKR ${product.costBreakdown.totalCost.toFixed(2)}`, summaryValueX, finalY, { align: 'right' });
+        
+        docPDF.text(`Profit (${product.costing.profit}%):`, summaryX, finalY += 7, {align: 'right'});
+        docPDF.text(`LKR ${product.costBreakdown.profit.toFixed(2)}`, summaryValueX, finalY, { align: 'right' });
 
-        } catch (e) {
-            console.error("Failed to generate PDF:", e);
-            alert("An error occurred while generating the PDF.");
-        } finally {
-            root.unmount();
-            printableElement.remove();
-        }
+        docPDF.setFontSize(bodyFontSize + 4);
+        docPDF.text('Final Selling Price:', summaryX, finalY += 10, {align: 'right'});
+        docPDF.text(`LKR ${product.finalUnitPrice.toFixed(2)}`, summaryValueX, finalY, { align: 'right' });
+
+        docPDF.save(`CostSheet-${product.serialNumber}.pdf`);
     };
     
     if(loading) return <div className="p-8 text-center">Loading...</div>;
