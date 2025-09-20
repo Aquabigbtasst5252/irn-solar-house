@@ -1,37 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db, storage } from '../../services/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, addDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import {
+  doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, addDoc, Timestamp, query, orderBy
+} from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import Modal from '../ui/Modal';
-import { PlusCircleIcon, PencilIcon, TrashIcon } from '../ui/Icons';
+import { PencilIcon, TrashIcon, PlusCircleIcon } from '../ui/Icons';
 
-/**
- * A portal for managing all public-facing website content.
- * @returns {React.ReactElement} The Website Management component.
- */
-const WebsiteManagementPortal = () => {
-    // State for data
+const WebsiteManagementPortal = ({ currentUser }) => {
     const [content, setContent] = useState(null);
     const [categories, setCategories] = useState([]);
     const [models, setModels] = useState({});
+    const [featuredImages, setFeaturedImages] = useState([]);
     
-    // State for UI
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [uploadProgress, setUploadProgress] = useState(0);
 
-    // State for Model (Product) Modal
     const [isModelModalOpen, setIsModelModalOpen] = useState(false);
     const [currentModel, setCurrentModel] = useState(null);
     const [currentCategoryForModel, setCurrentCategoryForModel] = useState(null);
 
-    // State for Category Modal
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
     const [currentCategoryForEdit, setCurrentCategoryForEdit] = useState(null);
 
-    // Fetch all data on component mount
+    const [newFeaturedImageFiles, setNewFeaturedImageFiles] = useState([]);
+
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         try {
@@ -43,6 +39,10 @@ const WebsiteManagementPortal = () => {
             const categoriesSnapshot = await getDocs(categoriesQuery);
             const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setCategories(categoriesData);
+
+            const featuredImagesQuery = query(collection(db, 'featured_products'), orderBy('createdAt', 'asc'));
+            const featuredImagesSnap = await getDocs(featuredImagesQuery);
+            setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
             const modelsData = {};
             for (const category of categoriesData) {
@@ -63,7 +63,6 @@ const WebsiteManagementPortal = () => {
         fetchAllData();
     }, [fetchAllData]);
 
-    // --- GENERAL CONTENT FUNCTIONS ---
     const handleContentInputChange = (e) => setContent(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
     const handleShowroomChange = (index, e) => {
@@ -91,7 +90,6 @@ const WebsiteManagementPortal = () => {
         } catch (err) { setError("Failed to save homepage content."); } finally { setSaving(false); }
     };
 
-    // --- CATEGORY MANAGEMENT FUNCTIONS ---
     const openAddCategoryModal = () => {
         setCurrentCategoryForEdit({ name: '', description: '', imageUrl: '', imagePath: '' });
         setIsCategoryModalOpen(true);
@@ -154,7 +152,6 @@ const WebsiteManagementPortal = () => {
         }
     };
 
-    // --- MODEL (PRODUCT) MANAGEMENT FUNCTIONS ---
     const openAddModelModal = (category) => {
         setCurrentCategoryForModel(category);
         setCurrentModel({ name: '', description: '', price: 0, imageUrl: '', imagePath: '' });
@@ -227,12 +224,74 @@ const WebsiteManagementPortal = () => {
         }
     };
 
+    const handleFeaturedImageFileChange = (e) => {
+        if (e.target.files.length > 0) {
+            setNewFeaturedImageFiles(Array.from(e.target.files));
+        }
+    };
+
+    const handleFeaturedImageUpload = async () => {
+        if (newFeaturedImageFiles.length === 0) {
+            setError("Please select one or more image files to upload.");
+            return;
+        }
+        setSaving(true);
+        setError('');
+        setUploadProgress(0);
+
+        const uploadPromises = newFeaturedImageFiles.map(file => {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const filePath = `featured_products/${Date.now()}_${file.name}`;
+                    const storageRef = ref(storage, filePath);
+                    const uploadTask = uploadBytesResumable(storageRef, file);
+                    const downloadURL = await getDownloadURL((await uploadTask).ref);
+                    
+                    await addDoc(collection(db, 'featured_products'), {
+                        imageUrl: downloadURL,
+                        imagePath: filePath,
+                        createdAt: Timestamp.now()
+                    });
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+
+        try {
+            await Promise.all(uploadPromises);
+            setNewFeaturedImageFiles([]);
+            fetchAllData();
+            setSuccess("All featured images uploaded successfully!");
+            setTimeout(() => setSuccess(''), 3000);
+        } catch(err) {
+            console.error("Error uploading one or more featured images:", err);
+            setError("Failed to upload one or more images.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteFeaturedImage = async (image) => {
+        if (window.confirm("Are you sure you want to delete this featured image?")) {
+            try {
+                await deleteObject(ref(storage, image.imagePath));
+                await deleteDoc(doc(db, 'featured_products', image.id));
+                fetchAllData();
+            } catch (err) {
+                console.error("Error deleting featured image:", err);
+                setError("Failed to delete image.");
+            }
+        }
+    };
+
     if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
 
     return (
         <div className="p-4 sm:p-8 space-y-8">
             <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} size="2xl">
-                <h3 className="text-xl font-bold mb-4">{currentCategoryForEdit?.id ? 'Edit' : 'Add New'} Product Category</h3>
+                 <h3 className="text-xl font-bold mb-4">{currentCategoryForEdit?.id ? 'Edit' : 'Add New'} Product Category</h3>
                 <form onSubmit={handleCategorySubmit} className="space-y-4">
                     <div><label className="block text-sm font-medium">Category Name</label><input type="text" name="name" required value={currentCategoryForEdit?.name || ''} onChange={handleCategoryInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                     <div><label className="block text-sm font-medium">Description for Homepage</label><textarea name="description" required value={currentCategoryForEdit?.description || ''} onChange={handleCategoryInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
@@ -243,7 +302,7 @@ const WebsiteManagementPortal = () => {
                 </form>
             </Modal>
             <Modal isOpen={isModelModalOpen} onClose={() => setIsModelModalOpen(false)} size="2xl">
-                <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Product for {currentCategoryForModel?.name}</h3>
+                 <h3 className="text-xl font-bold mb-4">{currentModel?.id ? 'Edit' : 'Add New'} Product for {currentCategoryForModel?.name}</h3>
                 <form onSubmit={handleModelSubmit} className="space-y-4">
                     <div><label className="block text-sm font-medium">Product Name</label><input type="text" name="name" required value={currentModel?.name || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                     <div><label className="block text-sm font-medium">Description</label><textarea name="description" required value={currentModel?.description || ''} onChange={handleModelInputChange} className="mt-1 w-full p-2 border rounded-md" rows="3"></textarea></div>
@@ -260,7 +319,37 @@ const WebsiteManagementPortal = () => {
             {error && <div className="p-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
-                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Homepage Content</h3>
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Manage Featured Product Advertisements</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload New Image(s)</label>
+                        <input type="file" accept="image/*" multiple onChange={handleFeaturedImageFileChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                        {newFeaturedImageFiles.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">{newFeaturedImageFiles.length} file(s) selected.</p>
+                        )}
+                        <button onClick={handleFeaturedImageUpload} disabled={saving || newFeaturedImageFiles.length === 0} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">
+                            {saving ? 'Uploading...' : 'Upload Images'}
+                        </button>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Current Images</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            {featuredImages.map(image => (
+                                <div key={image.id} className="relative group">
+                                    <img src={image.imageUrl} alt="Featured product" className="w-full h-24 object-contain rounded-md bg-gray-100"/>
+                                    <button onClick={() => handleDeleteFeaturedImage(image)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                         {featuredImages.length === 0 && <p className="text-sm text-gray-500 mt-2">No featured images uploaded yet.</p>}
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                 <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Homepage Content</h3>
                  <div className="space-y-6">
                     <fieldset className="border p-4 rounded-md"><legend className="font-semibold px-2">'Why Choose Us' Section</legend>
                         <div className="space-y-4">
@@ -361,3 +450,4 @@ const WebsiteManagementPortal = () => {
 };
 
 export default WebsiteManagementPortal;
+

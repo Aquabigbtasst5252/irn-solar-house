@@ -7,10 +7,9 @@ import ForgotPassword from './components/auth/ForgotPassword';
 import Dashboard from './pages/Dashboard';
 import HomePage from './pages/HomePage';
 import ProductCategoryPage from './pages/ProductCategoryPage';
-import PrivacyPolicy from './pages/PrivacyPolicy'; // Import the new component
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 // --- Firebase Initialization ---
-// This should be outside the component to avoid re-initialization on re-renders
 let db, auth;
 try {
     const firebaseConfigString = `{"apiKey":"AIzaSyDGJCxkumT_9vkKeN48REPwzE9X22f-R5k","authDomain":"irn-solar-house.firebaseapp.com","projectId":"irn-solar-house","storageBucket":"irn-solar-house.firebasestorage.app","messagingSenderId":"509848904393","appId":"1:509848904393:web:2752bb47a15f10279c6d18","measurementId":"G-G6M6DPNERN"}`;
@@ -36,7 +35,6 @@ export default function App() {
     const [productCategories, setProductCategories] = useState([]);
     const [featuredImages, setFeaturedImages] = useState([]);
     
-    // --- Hash-based Routing State ---
     const [route, setRoute] = useState(window.location.hash);
 
     useEffect(() => {
@@ -101,7 +99,6 @@ export default function App() {
             return <Dashboard user={user} onSignOut={handleSignOut} />;
         }
         
-        // --- Routing Logic ---
         if (route.startsWith('#/products/')) {
             const categoryId = route.split('/')[2];
             return <ProductCategoryPage categoryId={categoryId} />;
@@ -109,10 +106,18 @@ export default function App() {
         
         switch(route) {
             case '#/signin':
-                return <SignIn setView={(hash) => window.location.hash = hash} onLoginSuccess={handleLoginSuccess} />;
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                        <SignIn setView={(hash) => window.location.hash = hash} onLoginSuccess={handleLoginSuccess} />
+                    </div>
+                );
             case '#/forgot-password':
-                return <ForgotPassword setView={(hash) => window.location.hash = hash} />;
-            case '#/privacy': // Add the new route
+                return (
+                     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                        <ForgotPassword setView={(hash) => window.location.hash = hash} />
+                    </div>
+                );
+            case '#/privacy':
                 return <PrivacyPolicy />;
             case '#/':
             default:
