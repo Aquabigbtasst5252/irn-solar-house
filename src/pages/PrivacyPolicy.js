@@ -32,7 +32,7 @@ const PrivacyPolicy = () => {
 
                     <div className={sectionStyle}>
                         <p className={textStyle}>
-                            IRN Solar House ("us", "we", or "our") operates the IRN Solar House website (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
+                            We operates the IRN Solar House website (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
                         </p>
                     </div>
 
