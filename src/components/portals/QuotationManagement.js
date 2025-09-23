@@ -16,7 +16,7 @@ import {
 import Modal from '../ui/Modal';
 import CustomerManagement from './CustomerManagement';
 import SerialSelectorModal from '../ui/SerialSelectorModal';
-import { PlusCircleIcon, TrashIcon, DocumentTextIcon } from '../ui/Icons';
+import { PlusCircleIcon, TrashIcon, DocumentTextIcon, PencilIcon } from '../ui/Icons';
 import { generatePdf, logActivity } from '../../utils/helpers';
 
 // --- Pagination Component ---
@@ -90,7 +90,9 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     });
     const [isSaving, setIsSaving] = useState(false);
     const [savedQuotations, setSavedQuotations] = useState([]);
+    const [editingQuotationId, setEditingQuotationId] = useState(null);
     const [discount, setDiscount] = useState(0);
+    const [advancePayment, setAdvancePayment] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
 
     const subtotal = useMemo(() => quotationItems.reduce((sum, item) => sum + item.totalPrice, 0), [quotationItems]);
@@ -159,26 +161,34 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
             return;
         }
         setIsSaving(true);
+        const quotationData = {
+            customerId: selectedCustomerId,
+            items: quotationItems,
+            subtotal: subtotal,
+            discount: discount,
+            total: grandTotal,
+            advancePayment: advancePayment,
+            status: 'draft',
+            warrantyPeriod: warrantyPeriod,
+            warrantyEndDate: warrantyEndDate,
+            createdBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
+            lastUpdated: Timestamp.now()
+        };
+
         try {
-            const quotationData = {
-                customerId: selectedCustomerId,
-                items: quotationItems,
-                subtotal: subtotal,
-                discount: discount,
-                total: grandTotal,
-                status: 'draft',
-                createdAt: Timestamp.now(),
-                createdBy: { uid: currentUser.uid, name: currentUser.displayName || currentUser.email },
-                warrantyPeriod: warrantyPeriod,
-                warrantyEndDate: warrantyEndDate,
-            };
-            const newQuotationRef = await addDoc(collection(db, 'quotations'), quotationData);
-            await logActivity(
-                currentUser,
-                'Created Quotation',
-                { quotationId: newQuotationRef.id, customerId: selectedCustomerId, total: grandTotal }
-            );
-            alert("Quotation saved successfully!");
+            if (editingQuotationId) {
+                const quotationRef = doc(db, 'quotations', editingQuotationId);
+                await runTransaction(db, async (transaction) => {
+                    transaction.update(quotationRef, quotationData);
+                });
+                await logActivity(currentUser, 'Updated Quotation', { quotationId: editingQuotationId, total: grandTotal });
+                alert("Quotation updated successfully!");
+            } else {
+                quotationData.createdAt = Timestamp.now();
+                const newQuotationRef = await addDoc(collection(db, 'quotations'), quotationData);
+                await logActivity(currentUser, 'Created Quotation', { quotationId: newQuotationRef.id, customerId: selectedCustomerId, total: grandTotal });
+                alert("Quotation saved successfully!");
+            }
             resetForm();
         } catch (err) {
             console.error("Error saving quotation: ", err);
@@ -243,8 +253,30 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     const handleRemoveItem = (index) => { setQuotationItems(prev => prev.filter((_, i) => i !== index)); };
     const availableProducts = useMemo(() => { return productType === 'stock' ? stockItems : finishedProducts; }, [productType, stockItems, finishedProducts]);
     const handleGenerateQuotation = (quotationData, action) => { if (!letterheadBase64) { alert("Letterhead image is not loaded yet. Please wait a moment and try again."); return; } const customer = customers.find(c => c.id === quotationData.customerId); generatePdf(quotationData, 'quotation', letterheadBase64, customer, action); };
-    const resetForm = () => { setSelectedCustomerId(''); setQuotationItems([]); setProductType('stock'); setSelectedProductId(''); setSelectedProductQty(1); setDiscount(0); };
+    const resetForm = () => {
+        setSelectedCustomerId('');
+        setQuotationItems([]);
+        setProductType('stock');
+        setSelectedProductId('');
+        setSelectedProductQty(1);
+        setDiscount(0);
+        setAdvancePayment(0);
+        setEditingQuotationId(null);
+        setWarrantyPeriod("1 Year");
+        setWarrantyEndDate(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]);
+    };
     
+    const handleEditQuotation = (quotation) => {
+        setEditingQuotationId(quotation.id);
+        setSelectedCustomerId(quotation.customerId);
+        setQuotationItems(quotation.items);
+        setDiscount(quotation.discount || 0);
+        setAdvancePayment(quotation.advancePayment || 0);
+        setWarrantyPeriod(quotation.warrantyPeriod || "1 Year");
+        setWarrantyEndDate(quotation.warrantyEndDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]);
+        window.scrollTo(0, 0);
+    };
+
     const handleDeleteQuotation = async (quotation) => {
         const isSuperAdmin = currentUser.role === 'super_admin';
         if (!isSuperAdmin) {
@@ -346,7 +378,7 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                         }
                     }
     
-                    const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id };
+                    const invoiceData = { ...quotation, status: 'unpaid', convertedAt: Timestamp.now(), quotationId: quotation.id, id: newInvoiceRef.id, advancePayment: quotation.advancePayment || 0 };
                     transaction.set(newInvoiceRef, invoiceData);
                     transaction.update(quotationRef, { status: 'invoiced', invoiceId: newInvoiceRef.id });
                 });
@@ -373,7 +405,7 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
         <div className="p-4 sm:p-8 space-y-6">
             <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} size="4xl"><CustomerManagement portalType="import" isModal={true} onCustomerAdded={handleCustomerAdded} onClose={() => setIsCustomerModalOpen(false)} /></Modal>
             <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
-            <h2 className="text-3xl font-bold text-gray-800">Create New Quotation</h2>
+            <h2 className="text-3xl font-bold text-gray-800">{editingQuotationId ? `Editing Quotation #${editingQuotationId.substring(0, 5)}...` : 'Create New Quotation'}</h2>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials && item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
@@ -392,6 +424,10 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                                     <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
                                 </div>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600">Advance Payment (LKR)</label>
+                                <input type="number" value={advancePayment} onChange={e => setAdvancePayment(parseFloat(e.target.value) || 0)} min="0" className="w-full p-2 border border-gray-300 rounded-md"/>
+                            </div>
                         </div>
                     </div>
                     <div className="text-right space-y-2">
@@ -399,9 +435,14 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                         <div className="flex justify-between text-lg"><span className="font-medium text-gray-700">Subtotal:</span><span className="font-semibold text-gray-900">LKR {subtotal.toFixed(2)}</span></div>
                         <div className="flex justify-between text-lg text-red-600"><span className="font-medium">Discount:</span><span className="font-semibold">- LKR {discountAmount.toFixed(2)}</span></div>
                         <div className="flex justify-between text-2xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Grand Total:</span><span className="font-bold text-green-600">LKR {grandTotal.toFixed(2)}</span></div>
+                        {advancePayment > 0 && (
+                            <div className="flex justify-between text-lg text-blue-600"><span className="font-medium">Advance Payment:</span><span className="font-semibold">- LKR {advancePayment.toFixed(2)}</span></div>
+                        )}
+                        <div className="flex justify-between text-xl border-t pt-2 mt-2"><span className="font-bold text-gray-800">Balance Due:</span><span className="font-bold text-green-600">LKR {(grandTotal - advancePayment).toFixed(2)}</span></div>
                         <div className="pt-6 flex flex-col sm:flex-row justify-end gap-3">
-                            <button onClick={() => handleGenerateQuotation({ customerId: selectedCustomerId, items: quotationItems, subtotal, discount, total: grandTotal, id: `QUO-${Date.now().toString().slice(-6)}`, createdAt: Timestamp.now(), warrantyPeriod, warrantyEndDate }, 'download')} disabled={isSaving || !selectedCustomerId || quotationItems.length === 0} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-400">Download PDF</button>
-                            <button onClick={handleSaveQuotation} disabled={isSaving || !selectedCustomerId || quotationItems.length === 0} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800 disabled:bg-green-400">{isSaving ? 'Saving...' : 'Save Quotation'}</button>
+                            <button onClick={() => handleGenerateQuotation({ customerId: selectedCustomerId, items: quotationItems, subtotal, discount, total: grandTotal, advancePayment, id: `QUO-${Date.now().toString().slice(-6)}`, createdAt: Timestamp.now(), warrantyPeriod, warrantyEndDate }, 'download')} disabled={isSaving || !selectedCustomerId || quotationItems.length === 0} className="bg-gray-600 text-white px-5 py-2 rounded-md hover:bg-gray-700 disabled:bg-gray-400">Download PDF</button>
+                            <button onClick={handleSaveQuotation} disabled={isSaving || !selectedCustomerId || quotationItems.length === 0} className="bg-green-700 text-white px-5 py-2 rounded-md hover:bg-green-800 disabled:bg-green-400">{isSaving ? 'Saving...' : (editingQuotationId ? 'Update Quotation' : 'Save Quotation')}</button>
+                            {editingQuotationId && (<button onClick={resetForm} type="button" className="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700">Cancel Edit</button>)}
                         </div>
                     </div>
                 </div>
@@ -443,7 +484,10 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                                     <td className="px-4 py-2 text-center">
                                         <div className="flex justify-center items-center space-x-2">
                                             {q.status === 'draft' && (
-                                                <button onClick={() => handleConvertToInvoice(q)} disabled={isSaving} className="text-blue-600 hover:text-blue-900 disabled:text-gray-400 text-sm font-medium">Invoice</button>
+                                                <>
+                                                    <button onClick={() => handleEditQuotation(q)} className="text-gray-600 hover:text-gray-900" title="Edit"><PencilIcon/></button>
+                                                    <button onClick={() => handleConvertToInvoice(q)} disabled={isSaving} className="text-blue-600 hover:text-blue-900 disabled:text-gray-400 text-sm font-medium">Invoice</button>
+                                                </>
                                             )}
                                             <button onClick={() => handleGenerateQuotation(q, 'view')} className="text-gray-600 hover:text-gray-900"><DocumentTextIcon/></button>
                                             {currentUser.role === 'super_admin' && (<button onClick={() => handleDeleteQuotation(q)} className="text-red-600 hover:text-red-900"><TrashIcon/></button>)}

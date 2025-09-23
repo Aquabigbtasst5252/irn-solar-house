@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../../services/firebase';
 import { collection, getDocs, query, orderBy, doc, deleteDoc, runTransaction, updateDoc } from 'firebase/firestore';
-import { PlusCircleIcon, DocumentTextIcon, TrashIcon, CashIcon } from '../ui/Icons';
-import { generatePdf, logActivity } from '../../utils/helpers';
+import { PlusCircleIcon, DocumentTextIcon, TrashIcon, CashIcon, ReceiptIcon } from '../ui/Icons';
+import { generatePdf, logActivity, generateAdvancePaymentPdf } from '../../utils/helpers';
 
 // --- Pagination Component ---
 const Pagination = ({ nPages, currentPage, setCurrentPage }) => {
@@ -211,6 +211,16 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
         generatePdf(invoice, 'invoice', letterheadBase64, customer, action);
     };
 
+    const handleGenerateAdvanceReceipt = (invoice) => {
+        if (!letterheadBase64) {
+            alert("Letterhead not loaded. Please try again.");
+            return;
+        }
+        const customer = customers.find(c => c.id === invoice.customerId);
+        // Assuming default settings for simplicity, or fetch them if needed
+        generateAdvancePaymentPdf(invoice, customer, letterheadBase64, {});
+    };
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'unpaid': return 'bg-yellow-100 text-yellow-800';
@@ -271,6 +281,11 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
                                     <td className="px-5 py-4 text-center">
                                         <div className="flex justify-center items-center space-x-3">
                                             <button onClick={() => exportToPDF(invoice, 'view')} className="text-gray-600 hover:text-gray-900" title="View PDF"><DocumentTextIcon /></button>
+                                            {invoice.advancePayment > 0 && (
+                                                <button onClick={() => handleGenerateAdvanceReceipt(invoice)} className="text-blue-600 hover:text-blue-900" title="Download Advance Receipt">
+                                                    <ReceiptIcon />
+                                                </button>
+                                            )}
                                             {invoice.status === 'unpaid' && (
                                                 <button onClick={() => handleMarkAsPaid(invoice.id)} disabled={isProcessing} className="text-green-600 hover:text-green-900 disabled:text-gray-400" title="Mark as Paid"><CashIcon /></button>
                                             )}

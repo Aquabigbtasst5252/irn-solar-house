@@ -32,33 +32,63 @@ const numberToWords = (num) => {
     const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
 
     const convertHundreds = (n) => {
+        let word = '';
         if (n > 99) {
-            return ones[Math.floor(n / 100)] + ' hundred ' + convertTens(n % 100);
+            word += ones[Math.floor(n / 100)] + ' hundred';
+            if (n % 100 > 0) {
+                word += ' ' + convertTens(n % 100);
+            }
+        } else {
+            word += convertTens(n);
         }
-        return convertTens(n);
+        return word;
     };
 
     const convertTens = (n) => {
         if (n < 10) return ones[n];
         if (n >= 10 && n < 20) return teens[n - 10];
-        return tens[Math.floor(n / 10)] + ' ' + ones[n % 10];
+        const ten = tens[Math.floor(n / 10)];
+        const one = ones[n % 10];
+        return ten + (one ? ' ' + one : '');
     };
 
-    if (num === 0) return 'Zero';
+    if (num === 0) return 'Zero Rupees Only.';
+
+    const integerPart = Math.floor(num);
+    const decimalPart = Math.round((num - integerPart) * 100);
+
     let words = '';
-    if (Math.floor(num / 1000000) > 0) {
-        words += convertHundreds(Math.floor(num / 1000000)) + ' million ';
-        num %= 1000000;
+    if (integerPart > 0) {
+        let tempNum = integerPart;
+        if (Math.floor(tempNum / 10000000) > 0) {
+            words += convertHundreds(Math.floor(tempNum / 10000000)) + ' crore ';
+            tempNum %= 10000000;
+        }
+        if (Math.floor(tempNum / 100000) > 0) {
+            words += convertHundreds(Math.floor(tempNum / 100000)) + ' lakh ';
+            tempNum %= 100000;
+        }
+        if (Math.floor(tempNum / 1000) > 0) {
+            words += convertHundreds(Math.floor(tempNum / 1000)) + ' thousand ';
+            tempNum %= 1000;
+        }
+        if (tempNum > 0) {
+            words += convertHundreds(tempNum);
+        }
+        words = words.trim();
+        words = words.charAt(0).toUpperCase() + words.slice(1) + ' Rupees';
     }
-    if (Math.floor(num / 1000) > 0) {
-        words += convertHundreds(Math.floor(num / 1000)) + ' thousand ';
-        num %= 1000;
-    }
-    if (num > 0) {
-        words += convertHundreds(num);
+
+    if (decimalPart > 0) {
+        const decimalWords = convertTens(decimalPart);
+        if (words) {
+            words += ' and ' + (decimalWords.charAt(0).toUpperCase() + decimalWords.slice(1)) + ' Cents';
+        } else {
+            words = (decimalWords.charAt(0).toUpperCase() + decimalWords.slice(1)) + ' Cents';
+        }
     }
     
-    return (words.charAt(0).toUpperCase() + words.slice(1)).trim() + ' Rupees Only.';
+    return words + ' Only.';
 };
 
 
@@ -126,68 +156,104 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
         tableRows.push(itemData);
     });
 
+    const drawPageContent = (isNewPage) => {
+        if (isNewPage) {
+            if (letterheadBase64) {
+                const imgWidth = docPDF.internal.pageSize.getWidth();
+                const imgHeight = docPDF.internal.pageSize.getHeight();
+                docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+            }
+            docPDF.setFontSize(titleFontSize);
+            docPDF.setFont(fontType, 'bold');
+            docPDF.text(title, 105, marginTop, { align: 'center' });
+        }
+    };
+
     autoTable(docPDF, {
         startY: marginTop + 55,
         head: [tableColumn],
         body: tableRows,
         theme: 'striped',
         headStyles: { fillColor: [22, 160, 133] },
-        styles: { font: fontType, fontSize: bodyFontSize - 1 },
+        styles: { font: fontType, fontSize: bodyFontSize - 1, cellPadding: 2.5 },
         margin: { left: marginLeft, right: marginRight },
-        didDrawCell: (data) => {
-            if (data.column.index === 1 && data.cell.section === 'body') {
-                docPDF.setFontSize(bodyFontSize - 2);
-            }
-        },
-        didDrawPage: function (data) {
-            if (data.pageNumber > 1) {
-                if (letterheadBase64) {
-                    const imgWidth = docPDF.internal.pageSize.getWidth();
-                    const imgHeight = docPDF.internal.pageSize.getHeight();
-                    docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-                }
-                docPDF.setFontSize(titleFontSize);
-                docPDF.setFont(fontType, 'bold');
-                docPDF.text(title, 105, marginTop, { align: 'center' });
-            }
-            const pageCount = docPDF.internal.getNumberOfPages();
-            docPDF.setFontSize(bodyFontSize - 2);
-            docPDF.text(footerText, 105, footerY + 5, { align: 'center' });
-            docPDF.text(`Page ${data.pageNumber} of ${pageCount}`, 210 - marginRight, footerY + 10, { align: 'right' });
+        didDrawPage: (data) => {
+            drawPageContent(data.pageNumber > 1);
         }
     });
 
     let finalY = docPDF.lastAutoTable.finalY;
-    const totalsX = 140;
-    const totalsValueX = 210 - marginRight;
     
+    // --- Check for page break before printing totals ---
+    let requiredHeight = 40; // Base height for totals
+    if (docData.discount > 0) requiredHeight += 7;
+    if (docData.advancePayment > 0) requiredHeight += 14;
+    if (type === 'invoice') requiredHeight += 60; // For words and bank details
+    if (docData.warrantyPeriod) requiredHeight += 20;
+
+    if (finalY + requiredHeight > pageHeight - marginBottom) {
+        docPDF.addPage();
+        drawPageContent(true);
+        finalY = marginTop; // Reset Y for new page
+    }
+
+    const totalsX = 130;
+    const totalsValueX = 205 - marginRight;
+    let currentY = finalY + 10;
+
+    const drawRightAlignedText = (leftText, rightText, y) => {
+        docPDF.text(leftText, totalsX, y);
+        docPDF.text(rightText, totalsValueX, y, { align: 'right' });
+    };
+
     docPDF.setFontSize(bodyFontSize);
     docPDF.setFont(fontType, 'normal');
-    docPDF.text(`Subtotal:`, totalsX, finalY + 10);
-    docPDF.text(`LKR ${docData.subtotal.toFixed(2)}`, totalsValueX, finalY + 10, { align: 'right' });
+    drawRightAlignedText('Subtotal:', `LKR ${docData.subtotal.toFixed(2)}`, currentY);
+    currentY += 7;
 
     if (docData.discount > 0) {
         const discountAmount = (docData.subtotal * docData.discount) / 100;
-        docPDF.setFont(fontType, 'normal');
         docPDF.setTextColor(255, 0, 0);
-        docPDF.text(`Discount (${docData.discount}%):`, totalsX, finalY + 17);
-        docPDF.text(`- LKR ${discountAmount.toFixed(2)}`, totalsValueX, finalY + 17, { align: 'right' });
+        drawRightAlignedText(`Discount (${docData.discount}%):`, `- LKR ${discountAmount.toFixed(2)}`, currentY);
         docPDF.setTextColor(0, 0, 0);
+        currentY += 7;
     }
     
     docPDF.setFontSize(bodyFontSize + 2);
     docPDF.setFont(fontType, 'bold');
-    docPDF.text(`Grand Total:`, totalsX, finalY + 24);
-    docPDF.text(`LKR ${docData.total.toFixed(2)}`, totalsValueX, finalY + 24, { align: 'right' });
+    drawRightAlignedText('Grand Total:', `LKR ${docData.total.toFixed(2)}`, currentY);
+    currentY += 7;
+
+    const balanceDue = docData.total - (docData.advancePayment || 0);
+
+    if (docData.advancePayment > 0) {
+        docPDF.setFontSize(bodyFontSize);
+        docPDF.setFont(fontType, 'normal');
+        docPDF.setTextColor(0, 0, 255);
+        drawRightAlignedText('Advance Payment:', `- LKR ${docData.advancePayment.toFixed(2)}`, currentY);
+        docPDF.setTextColor(0, 0, 0);
+        currentY += 7;
+    }
+
+    docPDF.setFontSize(bodyFontSize + 2);
+    docPDF.setFont(fontType, 'bold');
+    docPDF.setLineWidth(0.5);
+    docPDF.line(totalsX, currentY - 2, 210 - marginRight, currentY - 2);
+    drawRightAlignedText('Balance Due:', `LKR ${balanceDue.toFixed(2)}`, currentY);
+    currentY += 10;
     
-    finalY += 30;
+    finalY = currentY;
 
     if (type === 'invoice') {
         docPDF.setFontSize(bodyFontSize - 1);
         docPDF.setFont(fontType, 'italic');
-        docPDF.text(`In Words: ${numberToWords(docData.total)}`, marginLeft, finalY);
-        
-        finalY += 10;
+        const words = numberToWords(docData.total);
+        const splitWords = docPDF.splitTextToSize(words, 180);
+        docPDF.text(`In Words: ${splitWords[0]}`, marginLeft, finalY);
+        if(splitWords.length > 1) {
+            docPDF.text(splitWords.slice(1), marginLeft + 15, finalY + 4);
+        }
+        finalY += (splitWords.length * 4) + 5;
 
         docPDF.setFontSize(bodyFontSize);
         docPDF.setFont(fontType, 'bold');
@@ -214,10 +280,83 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
         docPDF.text('Warranty Information:', marginLeft, finalY);
         docPDF.setFont(fontType, 'normal');
         docPDF.text(`Period: ${docData.warrantyPeriod}`, marginLeft, finalY + 5);
-        docPDF.text(`Expires On: ${docData.warrantyEndDate}`, marginLeft, finalY + 10);
+        docPDF.text(`Expires On: ${new Date(docData.warrantyEndDate).toLocaleDateString()}`, marginLeft, finalY + 10);
     }
     
-    docPDF.save(`${title}-${docData.id}.pdf`);
+    // --- Finalize Footer on all pages ---
+    const pageCount = docPDF.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        docPDF.setPage(i);
+        docPDF.setFontSize(bodyFontSize - 2);
+        docPDF.text(footerText, 105, footerY + 5, { align: 'center' });
+        docPDF.text(`Page ${i} of ${pageCount}`, 210 - marginRight, footerY + 10, { align: 'right' });
+    }
+
+    if (action === 'download') {
+        docPDF.save(`${title}-${docData.id}.pdf`);
+    } else {
+        docPDF.output('dataurlnewwindow');
+    }
+};
+
+export const generateAdvancePaymentPdf = (invoice, customer, letterheadBase64, settings) => {
+    const docPDF = new jsPDF();
+    const {
+        marginLeft = 20,
+        marginRight = 20,
+        marginTop = 88,
+        marginBottom = 35,
+        bodyFontSize = 12,
+        fontType = 'helvetica',
+        footerText = 'Thank you for your payment!'
+    } = settings;
+
+    const pageHeight = 297;
+    const footerY = pageHeight - marginBottom;
+
+    if (letterheadBase64) {
+        const imgWidth = docPDF.internal.pageSize.getWidth();
+        const imgHeight = docPDF.internal.pageSize.getHeight();
+        docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+    }
+
+    docPDF.setFontSize(24);
+    docPDF.setFont(fontType, 'bold');
+    docPDF.text('ADVANCE PAYMENT RECEIPT', 105, marginTop - 20, { align: 'center' });
+
+    docPDF.setFontSize(bodyFontSize);
+    docPDF.setFont(fontType, 'normal');
+    docPDF.text(`Receipt No: ADV-${invoice.id}`, marginLeft, marginTop);
+    docPDF.text(`Date: ${new Date().toLocaleDateString()}`, 210 - marginRight, marginTop, { align: 'right' });
+    docPDF.text(`Quotation No: ${invoice.quotationId}`, marginLeft, marginTop + 7);
+
+    docPDF.setLineWidth(0.2);
+    docPDF.line(marginLeft, marginTop + 15, 210 - marginRight, marginTop + 15);
+
+    docPDF.setFont(fontType, 'bold');
+    docPDF.text('Received From:', marginLeft, marginTop + 25);
+    docPDF.setFont(fontType, 'normal');
+    const customerAddress = `${customer?.name || ''}\n${customer?.address || ''}\n${customer?.email || ''}\n${customer?.telephone || ''}`;
+    docPDF.text(customerAddress, marginLeft, marginTop + 32);
+
+    docPDF.setFontSize(bodyFontSize + 2);
+    docPDF.setFont(fontType, 'bold');
+    docPDF.text('Amount Received:', marginLeft, marginTop + 60);
+    docPDF.text(`LKR ${invoice.advancePayment.toFixed(2)}`, 210 - marginRight, marginTop + 60, { align: 'right' });
+
+    docPDF.setFontSize(bodyFontSize);
+    docPDF.setFont(fontType, 'italic');
+    const words = numberToWords(invoice.advancePayment);
+    const splitWords = docPDF.splitTextToSize(`In Words: ${words}`, 180);
+    docPDF.text(splitWords, marginLeft, marginTop + 70);
+
+    docPDF.setLineWidth(0.2);
+    docPDF.line(marginLeft, footerY - 10, 210 - marginRight, footerY - 10);
+    docPDF.setFontSize(bodyFontSize - 2);
+    docPDF.text('This is a computer-generated receipt and does not require a signature.', 105, footerY, { align: 'center' });
+    docPDF.text(footerText, 105, footerY + 5, { align: 'center' });
+
+    docPDF.save(`Advance-Receipt-${invoice.id}.pdf`);
 };
 
 
