@@ -178,10 +178,17 @@ const HomePage = ({ content, categories, featuredImages, projects }) => {
                         <div className="relative w-full max-w-4xl mx-auto h-[500px]">
                             {projectMedia.map((project, index) => (
                                 <div key={project.id} className={`absolute w-full h-full transition-opacity duration-1000 ease-in-out ${index === currentProjectIndex ? 'opacity-100' : 'opacity-0'}`}>
+                                    {/* Blurred Background */}
                                     {project.type === 'image' ? (
-                                        <img src={project.mediaUrl} alt="Project" className="w-full h-full object-contain rounded-2xl bg-black"/>
+                                        <img src={project.mediaUrl} alt="" className="absolute inset-0 w-full h-full object-cover filter blur-2xl brightness-50"/>
                                     ) : (
-                                        <video src={project.mediaUrl} className="w-full h-full object-contain rounded-2xl bg-black" controls autoPlay muted loop/>
+                                        <video src={project.mediaUrl} className="absolute inset-0 w-full h-full object-cover filter blur-2xl brightness-50" autoPlay muted loop/>
+                                    )}
+                                    {/* Foreground Content */}
+                                    {project.type === 'image' ? (
+                                        <img src={project.mediaUrl} alt="Project" className="relative w-full h-full object-contain"/>
+                                    ) : (
+                                        <video src={project.mediaUrl} className="relative w-full h-full object-contain" controls autoPlay muted loop/>
                                     )}
                                 </div>
                             ))}
