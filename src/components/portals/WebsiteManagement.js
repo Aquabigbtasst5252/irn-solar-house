@@ -12,6 +12,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const [categories, setCategories] = useState([]);
     const [models, setModels] = useState({});
     const [featuredImages, setFeaturedImages] = useState([]);
+    const [projects, setProjects] = useState([]);
     
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -27,6 +28,7 @@ const WebsiteManagementPortal = ({ currentUser }) => {
     const [currentCategoryForEdit, setCurrentCategoryForEdit] = useState(null);
 
     const [newFeaturedImageFiles, setNewFeaturedImageFiles] = useState([]);
+    const [newProjectFiles, setNewProjectFiles] = useState([]);
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
@@ -43,6 +45,10 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             const featuredImagesQuery = query(collection(db, 'featured_products'), orderBy('createdAt', 'asc'));
             const featuredImagesSnap = await getDocs(featuredImagesQuery);
             setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            const projectsQuery = query(collection(db, 'projects'), orderBy('createdAt', 'asc'));
+            const projectsSnap = await getDocs(projectsQuery);
+            setProjects(projectsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
             const modelsData = {};
             for (const category of categoriesData) {
@@ -286,6 +292,70 @@ const WebsiteManagementPortal = ({ currentUser }) => {
         }
     };
 
+    const handleProjectFileChange = (e) => {
+        if (e.target.files.length > 0) {
+            setNewProjectFiles(Array.from(e.target.files));
+        }
+    };
+
+    const handleProjectUpload = async () => {
+        if (newProjectFiles.length === 0) {
+            setError("Please select one or more files to upload.");
+            return;
+        }
+        setSaving(true);
+        setError('');
+        setUploadProgress(0);
+
+        const uploadPromises = newProjectFiles.map(file => {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const fileType = file.type.startsWith('image/') ? 'image' : 'video';
+                    const filePath = `projects/${Date.now()}_${file.name}`;
+                    const storageRef = ref(storage, filePath);
+                    const uploadTask = uploadBytesResumable(storageRef, file);
+                    const downloadURL = await getDownloadURL((await uploadTask).ref);
+
+                    await addDoc(collection(db, 'projects'), {
+                        mediaUrl: downloadURL,
+                        mediaPath: filePath,
+                        type: fileType,
+                        createdAt: Timestamp.now()
+                    });
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        });
+
+        try {
+            await Promise.all(uploadPromises);
+            setNewProjectFiles([]);
+            fetchAllData();
+            setSuccess("All project files uploaded successfully!");
+            setTimeout(() => setSuccess(''), 3000);
+        } catch(err) {
+            console.error("Error uploading one or more project files:", err);
+            setError("Failed to upload one or more files.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteProject = async (project) => {
+        if (window.confirm("Are you sure you want to delete this project media?")) {
+            try {
+                await deleteObject(ref(storage, project.mediaPath));
+                await deleteDoc(doc(db, 'projects', project.id));
+                fetchAllData();
+            } catch (err) {
+                console.error("Error deleting project:", err);
+                setError("Failed to delete project media.");
+            }
+        }
+    };
+
     if (loading) return <div className="p-8 text-center">Loading Website Content...</div>;
 
     return (
@@ -317,6 +387,40 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             <div className="flex justify-between items-center"><h2 className="text-3xl font-bold text-gray-800">Website Content Management</h2></div>
             {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
             {error && <div className="p-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
+
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Manage Our Projects</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Upload New Photos or Videos</label>
+                        <input type="file" accept="image/*,video/*" multiple onChange={handleProjectFileChange} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                        {newProjectFiles.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">{newProjectFiles.length} file(s) selected.</p>
+                        )}
+                        <button onClick={handleProjectUpload} disabled={saving || newProjectFiles.length === 0} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:bg-gray-400">
+                            {saving ? 'Uploading...' : 'Upload Projects'}
+                        </button>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Current Projects</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            {projects.map(project => (
+                                <div key={project.id} className="relative group">
+                                    {project.type === 'image' ? (
+                                        <img src={project.mediaUrl} alt="Project" className="w-full h-24 object-cover rounded-md bg-gray-100"/>
+                                    ) : (
+                                        <video src={project.mediaUrl} className="w-full h-24 object-cover rounded-md bg-gray-100" controls/>
+                                    )}
+                                    <button onClick={() => handleDeleteProject(project)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <TrashIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                         {projects.length === 0 && <p className="text-sm text-gray-500 mt-2">No projects uploaded yet.</p>}
+                    </div>
+                </div>
+            </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Manage Featured Product Advertisements</h3>

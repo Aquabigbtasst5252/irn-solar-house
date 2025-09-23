@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../components/ui/Icons';
 
-const HomePage = ({ content, categories, featuredImages }) => {
+const HomePage = ({ content, categories, featuredImages, projects }) => {
     // --- State for Advertisement Slider ---
     const [currentAdIndex, setCurrentAdIndex] = useState(0);
     const adImages = featuredImages || [];
@@ -64,6 +64,7 @@ const HomePage = ({ content, categories, featuredImages }) => {
                     <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
                         <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
                         <a href="#featured" className="hover:text-yellow-600 transition-colors">Featured</a>
+                        <a href="#projects" className="hover:text-yellow-600 transition-colors">Projects</a>
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#showrooms" className="hover:text-yellow-600 transition-colors">Showrooms</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
@@ -146,6 +147,25 @@ const HomePage = ({ content, categories, featuredImages }) => {
                     </div>
                 </div>
             </section>
+
+            {projects && projects.length > 0 && (
+                <section id="projects" className="py-16 sm:py-24 bg-gray-50">
+                    <div className="container mx-auto px-6">
+                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Projects</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {projects.map(project => (
+                                <div key={project.id} className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300">
+                                    {project.type === 'image' ? (
+                                        <img src={project.mediaUrl} alt="Project" className="w-full h-56 object-cover"/>
+                                    ) : (
+                                        <video src={project.mediaUrl} className="w-full h-56 object-cover" controls/>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
 
             <section id="hybrid-ac" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">
