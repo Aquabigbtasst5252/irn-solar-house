@@ -8,7 +8,7 @@ const PdfSettings = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-    const [selectedReport, setSelectedReport] = useState('quotation'); // 'quotation', 'invoice', or 'cost_sheet'
+    const [selectedReport, setSelectedReport] = useState('quotation'); // 'quotation', 'invoice', 'cost_sheet', or 'advance_receipt'
 
     const defaultSettings = {
         quotation: {
@@ -25,6 +25,11 @@ const PdfSettings = () => {
             marginTop: 78, marginBottom: 25, marginLeft: 20, marginRight: 20,
             titleFontSize: 22, bodyFontSize: 10, fontType: 'helvetica',
             costSheetTitle: 'Cost Sheet', footerText: 'Internal Document'
+        },
+        advance_receipt: {
+            marginTop: 88, marginBottom: 35, marginLeft: 20, marginRight: 20,
+            titleFontSize: 24, bodyFontSize: 12, fontType: 'helvetica',
+            receiptTitle: 'ADVANCE PAYMENT RECEIPT', footerText: 'Thank you for your payment!'
         }
     };
 
@@ -91,6 +96,7 @@ const PdfSettings = () => {
                         <option value="quotation">Quotation</option>
                         <option value="invoice">Invoice</option>
                         <option value="cost_sheet">Cost Sheet</option>
+                        <option value="advance_receipt">Advance Receipt</option>
                     </select>
                 </div>
 
@@ -135,7 +141,8 @@ const PdfSettings = () => {
                                     {selectedReport === 'quotation' && <div><label className="block text-sm font-medium">Quotation Title</label><input type="text" name="quotationTitle" value={settings.quotationTitle || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>}
                                     {selectedReport === 'invoice' && <div><label className="block text-sm font-medium">Invoice Title</label><input type="text" name="invoiceTitle" value={settings.invoiceTitle || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>}
                                     {selectedReport === 'cost_sheet' && <div><label className="block text-sm font-medium">Cost Sheet Title</label><input type="text" name="costSheetTitle" value={settings.costSheetTitle || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>}
-                                     <div><label className="block text-sm font-medium">Footer Text</label><input type="text" name="footerText" value={settings.footerText || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
+                                    {selectedReport === 'advance_receipt' && <div><label className="block text-sm font-medium">Receipt Title</label><input type="text" name="receiptTitle" value={settings.receiptTitle || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>}
+                                    <div><label className="block text-sm font-medium">Footer Text</label><input type="text" name="footerText" value={settings.footerText || ''} onChange={handleInputChange} className="mt-1 w-full p-2 border rounded-md"/></div>
                                 </div>
                             </fieldset>
                         </div>

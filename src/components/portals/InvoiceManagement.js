@@ -217,8 +217,7 @@ const InvoiceManagement = ({ currentUser, onNavigate }) => {
             return;
         }
         const customer = customers.find(c => c.id === invoice.customerId);
-        // Assuming default settings for simplicity, or fetch them if needed
-        generateAdvancePaymentPdf(invoice, customer, letterheadBase64, {});
+        generateAdvancePaymentPdf(invoice, customer, letterheadBase64);
     };
 
     const getStatusColor = (status) => {

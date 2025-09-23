@@ -237,8 +237,6 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
 
     docPDF.setFontSize(bodyFontSize + 2);
     docPDF.setFont(fontType, 'bold');
-    docPDF.setLineWidth(0.5);
-    docPDF.line(totalsX, currentY - 2, 210 - marginRight, currentY - 2);
     drawRightAlignedText('Balance Due:', `LKR ${balanceDue.toFixed(2)}`, currentY);
     currentY += 10;
     
@@ -299,18 +297,29 @@ export const generatePdf = async (docData, type, letterheadBase64, customer, act
     }
 };
 
-export const generateAdvancePaymentPdf = (invoice, customer, letterheadBase64, settings) => {
-    const docPDF = new jsPDF();
-    const {
-        marginLeft = 20,
-        marginRight = 20,
-        marginTop = 88,
-        marginBottom = 35,
-        bodyFontSize = 12,
-        fontType = 'helvetica',
-        footerText = 'Thank you for your payment!'
-    } = settings;
+export const generateAdvancePaymentPdf = async (invoice, customer, letterheadBase64) => {
+    let settings = {};
+    try {
+        const settingsDocRef = doc(db, 'settings', 'pdf_advance_receipt');
+        const settingsSnap = await getDoc(settingsDocRef);
+        if (settingsSnap.exists()) {
+            settings = settingsSnap.data();
+        }
+    } catch (error) {
+        console.error(`Could not fetch PDF settings for advance receipt, using defaults.`, error);
+    }
 
+    const marginLeft = settings.marginLeft || 20;
+    const marginRight = settings.marginRight || 20;
+    const marginTop = settings.marginTop || 88;
+    const marginBottom = settings.marginBottom || 35;
+    const titleFontSize = settings.titleFontSize || 24;
+    const bodyFontSize = settings.bodyFontSize || 12;
+    const fontType = settings.fontType || 'helvetica';
+    const receiptTitle = settings.receiptTitle || 'ADVANCE PAYMENT RECEIPT';
+    const footerText = settings.footerText || 'Thank you for your payment!';
+
+    const docPDF = new jsPDF();
     const pageHeight = 297;
     const footerY = pageHeight - marginBottom;
 
@@ -320,9 +329,9 @@ export const generateAdvancePaymentPdf = (invoice, customer, letterheadBase64, s
         docPDF.addImage(letterheadBase64, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
     }
 
-    docPDF.setFontSize(24);
+    docPDF.setFontSize(titleFontSize);
     docPDF.setFont(fontType, 'bold');
-    docPDF.text('ADVANCE PAYMENT RECEIPT', 105, marginTop - 20, { align: 'center' });
+    docPDF.text(receiptTitle, 105, marginTop - 20, { align: 'center' });
 
     docPDF.setFontSize(bodyFontSize);
     docPDF.setFont(fontType, 'normal');
