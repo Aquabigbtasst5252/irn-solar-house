@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../components/ui/Icons';
 
-const HomePage = ({ content, categories, featuredImages }) => {
+const HomePage = ({ content, categories, featuredImages, projects }) => {
     // --- State for Advertisement Slider ---
     const [currentAdIndex, setCurrentAdIndex] = useState(0);
+    const [currentProjectIndex, setCurrentProjectIndex] = useState(0);
     const adImages = featuredImages || [];
+    const projectMedia = projects || [];
 
     useEffect(() => {
         if (adImages.length > 1) {
@@ -14,6 +16,27 @@ const HomePage = ({ content, categories, featuredImages }) => {
             return () => clearInterval(adTimer);
         }
     }, [adImages.length]);
+
+    useEffect(() => {
+        if (projectMedia.length > 1) {
+            const projectTimer = setInterval(() => {
+                setCurrentProjectIndex(prevIndex => (prevIndex + 1) % projectMedia.length);
+            }, 7000); // Longer duration for projects
+            return () => clearInterval(projectTimer);
+        }
+    }, [projectMedia.length]);
+
+    const goToPreviousProject = () => {
+        const isFirstSlide = currentProjectIndex === 0;
+        const newIndex = isFirstSlide ? projectMedia.length - 1 : currentProjectIndex - 1;
+        setCurrentProjectIndex(newIndex);
+    };
+
+    const goToNextProject = () => {
+        const isLastSlide = currentProjectIndex === projectMedia.length - 1;
+        const newIndex = isLastSlide ? 0 : currentProjectIndex + 1;
+        setCurrentProjectIndex(newIndex);
+    };
 
     // --- State for Responsive Video ---
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -64,6 +87,7 @@ const HomePage = ({ content, categories, featuredImages }) => {
                     <div className="hidden md:flex items-center space-x-8 font-medium text-gray-600">
                         <a href="#about" className="hover:text-yellow-600 transition-colors">About Us</a>
                         <a href="#featured" className="hover:text-yellow-600 transition-colors">Featured</a>
+                        <a href="#projects" className="hover:text-yellow-600 transition-colors">Projects</a>
                         <a href="#products" className="hover:text-yellow-600 transition-colors">Products</a>
                         <a href="#showrooms" className="hover:text-yellow-600 transition-colors">Showrooms</a>
                         <a href="#contact" className="hover:text-yellow-600 transition-colors">Contact</a>
@@ -146,6 +170,51 @@ const HomePage = ({ content, categories, featuredImages }) => {
                     </div>
                 </div>
             </section>
+
+            {projectMedia.length > 0 && (
+                <section id="projects" className="py-16 sm:py-24 bg-gray-50">
+                    <div className="container mx-auto px-6">
+                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-gray-800">Our Projects</h2>
+                        <div className="relative w-full max-w-4xl mx-auto h-[500px]">
+                            {projectMedia.map((project, index) => (
+                                <div key={project.id} className={`absolute w-full h-full transition-opacity duration-1000 ease-in-out ${index === currentProjectIndex ? 'opacity-100' : 'opacity-0'}`}>
+                                    {/* Blurred Background */}
+                                    {project.type === 'image' ? (
+                                        <img src={project.mediaUrl} alt="" className="absolute inset-0 w-full h-full object-cover filter blur-2xl brightness-50"/>
+                                    ) : (
+                                        <video src={project.mediaUrl} className="absolute inset-0 w-full h-full object-cover filter blur-2xl brightness-50" autoPlay muted loop/>
+                                    )}
+                                    {/* Foreground Content */}
+                                    {project.type === 'image' ? (
+                                        <img src={project.mediaUrl} alt="Project" className="relative w-full h-full object-contain"/>
+                                    ) : (
+                                        <video src={project.mediaUrl} className="relative w-full h-full object-contain" controls autoPlay muted loop/>
+                                    )}
+                                </div>
+                            ))}
+                            <div className="absolute top-1/2 -translate-y-1/2 left-5 z-10">
+                                <button onClick={goToPreviousProject} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                            </div>
+                            <div className="absolute top-1/2 -translate-y-1/2 right-5 z-10">
+                                <button onClick={goToNextProject} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            </div>
+                            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex space-x-3">
+                                {projectMedia.map((_, index) => (
+                                    <button
+                                        key={`dot-${index}`}
+                                        onClick={() => setCurrentProjectIndex(index)}
+                                        className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentProjectIndex ? 'bg-blue-600 scale-125' : 'bg-white/80 hover:bg-white'}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            )}
 
             <section id="hybrid-ac" className="py-16 sm:py-24 bg-gray-50">
                 <div className="container mx-auto px-6">

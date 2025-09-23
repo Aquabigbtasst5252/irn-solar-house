@@ -34,6 +34,7 @@ export default function App() {
     const [homepageContent, setHomepageContent] = useState(null);
     const [productCategories, setProductCategories] = useState([]);
     const [featuredImages, setFeaturedImages] = useState([]);
+    const [projects, setProjects] = useState([]);
     
     const [route, setRoute] = useState(window.location.hash);
 
@@ -61,6 +62,10 @@ export default function App() {
                 const featuredImagesQuery = query(collection(db, 'featured_products'));
                 const featuredImagesSnap = await getDocs(featuredImagesQuery);
                 setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                const projectsQuery = query(collection(db, 'projects'));
+                const projectsSnap = await getDocs(projectsQuery);
+                setProjects(projectsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
             } catch (error) {
                 console.error("Could not fetch public website data:", error);
@@ -121,7 +126,7 @@ export default function App() {
                 return <PrivacyPolicy />;
             case '#/':
             default:
-                return <HomePage content={homepageContent} categories={productCategories} featuredImages={featuredImages} />;
+                return <HomePage content={homepageContent} categories={productCategories} featuredImages={featuredImages} projects={projects} />;
         }
     };
 
