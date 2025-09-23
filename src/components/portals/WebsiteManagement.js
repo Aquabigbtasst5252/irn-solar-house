@@ -32,7 +32,9 @@ const WebsiteManagementPortal = ({ currentUser }) => {
 
     const fetchAllData = useCallback(async () => {
         setLoading(true);
+        setError('');
         try {
+            // Fetch primary content and categories first
             const contentDocRef = doc(db, 'website_content', 'homepage');
             const contentSnap = await getDoc(contentDocRef);
             setContent(contentSnap.exists() ? contentSnap.data() : {});
@@ -42,24 +44,43 @@ const WebsiteManagementPortal = ({ currentUser }) => {
             const categoriesData = categoriesSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             setCategories(categoriesData);
 
-            const featuredImagesQuery = query(collection(db, 'featured_products'), orderBy('createdAt', 'asc'));
-            const featuredImagesSnap = await getDocs(featuredImagesQuery);
-            setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            // Fetch other sections individually to prevent one failure from stopping the whole page
+            try {
+                const featuredImagesQuery = query(collection(db, 'featured_products'), orderBy('createdAt', 'asc'));
+                const featuredImagesSnap = await getDocs(featuredImagesQuery);
+                setFeaturedImages(featuredImagesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) {
+                console.error("Could not fetch featured products:", e);
+                setError(prev => prev + 'Could not load featured products. ');
+            }
 
-            const projectsQuery = query(collection(db, 'projects'), orderBy('createdAt', 'asc'));
-            const projectsSnap = await getDocs(projectsQuery);
-            setProjects(projectsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            try {
+                const projectsQuery = query(collection(db, 'projects'), orderBy('createdAt', 'asc'));
+                const projectsSnap = await getDocs(projectsQuery);
+                setProjects(projectsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) {
+                console.error("Could not fetch projects:", e);
+                setError(prev => prev + 'Could not load projects. Check Firestore rules for the `projects` collection. ');
+            }
 
             const modelsData = {};
             for (const category of categoriesData) {
-                const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
-                const modelsSnapshot = await getDocs(modelsQuery);
-                modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                try {
+                    const modelsQuery = query(collection(db, 'product_categories', category.id, 'models'), orderBy('createdAt', 'desc'));
+                    const modelsSnapshot = await getDocs(modelsQuery);
+                    modelsData[category.id] = modelsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } catch (e) {
+                    console.error(`Could not fetch models for category ${category.id}:`, e);
+                    setError(prev => prev + `Could not load products for ${category.name}. `);
+                    modelsData[category.id] = []; // Set empty array on failure
+                }
             }
             setModels(modelsData);
+
         } catch (err) {
-            console.error("Error fetching website content:", err);
-            setError("Failed to load website content.");
+            // This will catch failures in the primary content/category fetching
+            console.error("Error fetching primary website content:", err);
+            setError("Failed to load critical website content. The page may be incomplete.");
         } finally {
             setLoading(false);
         }
