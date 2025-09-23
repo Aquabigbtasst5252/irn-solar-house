@@ -4,7 +4,9 @@ import { SunIcon, ShieldCheckIcon, WrenchScrewdriverIcon, MapPinIcon } from '../
 const HomePage = ({ content, categories, featuredImages, projects }) => {
     // --- State for Advertisement Slider ---
     const [currentAdIndex, setCurrentAdIndex] = useState(0);
+    const [currentProjectIndex, setCurrentProjectIndex] = useState(0);
     const adImages = featuredImages || [];
+    const projectMedia = projects || [];
 
     useEffect(() => {
         if (adImages.length > 1) {
@@ -14,6 +16,27 @@ const HomePage = ({ content, categories, featuredImages, projects }) => {
             return () => clearInterval(adTimer);
         }
     }, [adImages.length]);
+
+    useEffect(() => {
+        if (projectMedia.length > 1) {
+            const projectTimer = setInterval(() => {
+                setCurrentProjectIndex(prevIndex => (prevIndex + 1) % projectMedia.length);
+            }, 7000); // Longer duration for projects
+            return () => clearInterval(projectTimer);
+        }
+    }, [projectMedia.length]);
+
+    const goToPreviousProject = () => {
+        const isFirstSlide = currentProjectIndex === 0;
+        const newIndex = isFirstSlide ? projectMedia.length - 1 : currentProjectIndex - 1;
+        setCurrentProjectIndex(newIndex);
+    };
+
+    const goToNextProject = () => {
+        const isLastSlide = currentProjectIndex === projectMedia.length - 1;
+        const newIndex = isLastSlide ? 0 : currentProjectIndex + 1;
+        setCurrentProjectIndex(newIndex);
+    };
 
     // --- State for Responsive Video ---
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -148,20 +171,39 @@ const HomePage = ({ content, categories, featuredImages, projects }) => {
                 </div>
             </section>
 
-            {projects && projects.length > 0 && (
+            {projectMedia.length > 0 && (
                 <section id="projects" className="py-16 sm:py-24 bg-gray-50">
                     <div className="container mx-auto px-6">
-                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 text-gray-800">Our Projects</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {projects.map(project => (
-                                <div key={project.id} className="bg-white rounded-lg shadow-lg overflow-hidden transform hover:scale-105 transition-transform duration-300">
+                        <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12 text-gray-800">Our Projects</h2>
+                        <div className="relative w-full max-w-4xl mx-auto h-[500px]">
+                            {projectMedia.map((project, index) => (
+                                <div key={project.id} className={`absolute w-full h-full transition-opacity duration-1000 ease-in-out ${index === currentProjectIndex ? 'opacity-100' : 'opacity-0'}`}>
                                     {project.type === 'image' ? (
-                                        <img src={project.mediaUrl} alt="Project" className="w-full h-56 object-cover"/>
+                                        <img src={project.mediaUrl} alt="Project" className="w-full h-full object-contain rounded-2xl bg-black"/>
                                     ) : (
-                                        <video src={project.mediaUrl} className="w-full h-56 object-cover" controls/>
+                                        <video src={project.mediaUrl} className="w-full h-full object-contain rounded-2xl bg-black" controls autoPlay muted loop/>
                                     )}
                                 </div>
                             ))}
+                            <div className="absolute top-1/2 -translate-y-1/2 left-5 z-10">
+                                <button onClick={goToPreviousProject} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                            </div>
+                            <div className="absolute top-1/2 -translate-y-1/2 right-5 z-10">
+                                <button onClick={goToNextProject} className="bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            </div>
+                            <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex space-x-3">
+                                {projectMedia.map((_, index) => (
+                                    <button
+                                        key={`dot-${index}`}
+                                        onClick={() => setCurrentProjectIndex(index)}
+                                        className={`w-3 h-3 rounded-full transition-all duration-300 ${index === currentProjectIndex ? 'bg-blue-600 scale-125' : 'bg-white/80 hover:bg-white'}`}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </section>
