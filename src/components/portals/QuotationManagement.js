@@ -78,6 +78,8 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
     const [productType, setProductType] = useState('stock');
     const [selectedProductId, setSelectedProductId] = useState('');
+    const [manualProductName, setManualProductName] = useState('');
+    const [manualUnitPrice, setManualUnitPrice] = useState('');
     const [selectedProductQty, setSelectedProductQty] = useState(1);
     const [isSerialModalOpen, setIsSerialModalOpen] = useState(false);
     const [productForSerialSelection, setProductForSerialSelection] = useState(null);
@@ -205,11 +207,32 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
             alert("Please select a product and enter a valid quantity.");
             return;
         }
-        if (productType === 'stock') {
+
+        if (productType === 'manual') {
+            if (!manualProductName || manualUnitPrice <= 0) {
+                alert("Please enter a valid product name and unit price for manual entry.");
+                return;
+            }
+            const newItem = {
+                id: `manual_${Date.now()}`,
+                name: manualProductName,
+                model: '',
+                qty: Number(selectedProductQty),
+                unitPrice: Number(manualUnitPrice),
+                totalPrice: Number(manualUnitPrice) * Number(selectedProductQty),
+                type: 'manual',
+                serials: []
+            };
+            setQuotationItems(prev => [...prev, newItem]);
+            setManualProductName('');
+            setManualUnitPrice('');
+            setSelectedProductQty(1);
+
+        } else if (productType === 'stock') {
             const product = stockItems.find(p => p.id === selectedProductId);
             setProductForSerialSelection(product);
             setIsSerialModalOpen(true);
-        } else {
+        } else { // finished product
             const productToAdd = finishedProducts.find(p => p.id === selectedProductId);
             if (productToAdd) {
                 const newItem = {
@@ -258,6 +281,8 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
         setQuotationItems([]);
         setProductType('stock');
         setSelectedProductId('');
+        setManualProductName('');
+        setManualUnitPrice('');
         setSelectedProductQty(1);
         setDiscount(0);
         setAdvancePayment(0);
@@ -407,7 +432,46 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
             <SerialSelectorModal isOpen={isSerialModalOpen} onClose={() => setIsSerialModalOpen(false)} product={productForSerialSelection} quantity={selectedProductQty} onConfirm={handleSerialSelectionConfirm}/>
             <h2 className="text-3xl font-bold text-gray-800">{editingQuotationId ? `Editing Quotation #${editingQuotationId.substring(0, 5)}...` : 'Create New Quotation'}</h2>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 1: Select a Customer</h3> <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Existing Customer</label> <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a customer --</option> {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.telephone}</option>)} </select> </div> <div><button onClick={() => setIsCustomerModalOpen(true)} className="w-full flex items-center justify-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"><PlusCircleIcon /> Add New</button></div> </div> </div>
-            <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3> <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end"> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label> <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="stock">Stock Item</option> <option value="finished">Finished Product</option> </select> </div> <div className="md:col-span-2"> <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label> <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white"> <option value="">-- Choose a product --</option> {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)} </select> </div> <div> <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label> <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/> </div> <div><button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button></div> </div> </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+                <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 2: Add Products</h3>
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                    <div className={productType === 'manual' ? "md:col-span-1" : "md:col-span-2"}>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Product Type</label>
+                        <select value={productType} onChange={(e) => { setProductType(e.target.value); setSelectedProductId(''); }} className="w-full p-2 border border-gray-300 rounded-md bg-white">
+                            <option value="stock">Stock Item</option>
+                            <option value="finished">Finished Product</option>
+                            <option value="manual">Manual Entry</option>
+                        </select>
+                    </div>
+                    {productType === 'manual' ? (
+                        <>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Product Name</label>
+                                <input type="text" value={manualProductName} onChange={e => setManualProductName(e.target.value)} placeholder="Enter product name" className="w-full p-2 border border-gray-300 rounded-md"/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Unit Price</label>
+                                <input type="number" value={manualUnitPrice} onChange={e => setManualUnitPrice(e.target.value)} min="0" placeholder="LKR" className="w-full p-2 border border-gray-300 rounded-md"/>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Select Product</label>
+                            <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white">
+                                <option value="">-- Choose a product --</option>
+                                {availableProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.model ? ` - ${p.model}`: ''}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                        <input type="number" value={selectedProductQty} onChange={e => setSelectedProductQty(e.target.value)} min="1" className="w-full p-2 border border-gray-300 rounded-md"/>
+                    </div>
+                    <div>
+                        <button onClick={handleAddItemToQuotation} className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">Add Item</button>
+                    </div>
+                </div>
+            </div>
             <div className="bg-white p-6 rounded-xl shadow-lg"> <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 3: Review Items</h3> <div className="overflow-x-auto"> <table className="min-w-full"> <thead className="bg-gray-100"><tr> <th className="px-4 py-2 text-left">Product & Serials</th> <th className="px-4 py-2 text-right">Quantity</th> <th className="px-4 py-2 text-right">Unit Price (LKR)</th> <th className="px-4 py-2 text-right">Total (LKR)</th> <th className="px-4 py-2 text-center">Actions</th> </tr></thead> <tbody> {quotationItems.length === 0 ? ( <tr><td colSpan="5" className="text-center py-8 text-gray-500">No items added yet.</td></tr> ) : ( quotationItems.map((item, index) => ( <tr key={index} className="border-b"> <td className="px-4 py-2"> <p className="font-semibold">{item.name}</p> {item.serials && item.serials.length > 0 && <p className="text-xs text-gray-500 font-mono">{item.serials.join(', ')}</p>} </td> <td className="px-4 py-2 text-right">{item.qty}</td> <td className="px-4 py-2 text-right">{item.unitPrice.toFixed(2)}</td> <td className="px-4 py-2 text-right font-semibold">{item.totalPrice.toFixed(2)}</td> <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(index)} className="text-red-500 hover:text-red-700"><TrashIcon /></button></td> </tr> )) )} </tbody> </table> </div> </div>
             <div className="bg-white p-6 rounded-xl shadow-lg">
                 <h3 className="text-xl font-semibold text-gray-700 border-b pb-3 mb-4">Step 4: Finalize</h3>
