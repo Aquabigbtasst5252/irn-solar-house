@@ -203,8 +203,9 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
     const handleCustomerAdded = (newCustomer) => { setCustomers(prev => [...prev, newCustomer]); setSelectedCustomerId(newCustomer.id); setIsCustomerModalOpen(false); };
     
     const handleAddItemToQuotation = () => {
-        if (!selectedProductId || selectedProductQty <= 0) {
-            alert("Please select a product and enter a valid quantity.");
+        // General validation for quantity
+        if (selectedProductQty <= 0) {
+            alert("Please enter a valid quantity.");
             return;
         }
 
@@ -224,31 +225,39 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
                 serials: []
             };
             setQuotationItems(prev => [...prev, newItem]);
+            // Reset manual fields
             setManualProductName('');
             setManualUnitPrice('');
             setSelectedProductQty(1);
 
-        } else if (productType === 'stock') {
-            const product = stockItems.find(p => p.id === selectedProductId);
-            setProductForSerialSelection(product);
-            setIsSerialModalOpen(true);
-        } else { // finished product
-            const productToAdd = finishedProducts.find(p => p.id === selectedProductId);
-            if (productToAdd) {
-                const newItem = {
-                    id: productToAdd.id,
-                    name: productToAdd.name,
-                    model: productToAdd.model || '',
-                    qty: Number(selectedProductQty),
-                    unitPrice: productToAdd.finalUnitPrice || 0,
-                    totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty),
-                    type: 'finished',
-                    components: productToAdd.items || [],
-                    serials: []
-                };
-                setQuotationItems(prev => [...prev, newItem]);
-                setSelectedProductId('');
-                setSelectedProductQty(1);
+        } else { // For 'stock' and 'finished' products
+            if (!selectedProductId) {
+                alert("Please select a product.");
+                return;
+            }
+
+            if (productType === 'stock') {
+                const product = stockItems.find(p => p.id === selectedProductId);
+                setProductForSerialSelection(product);
+                setIsSerialModalOpen(true);
+            } else { // finished product
+                const productToAdd = finishedProducts.find(p => p.id === selectedProductId);
+                if (productToAdd) {
+                    const newItem = {
+                        id: productToAdd.id,
+                        name: productToAdd.name,
+                        model: productToAdd.model || '',
+                        qty: Number(selectedProductQty),
+                        unitPrice: productToAdd.finalUnitPrice || 0,
+                        totalPrice: (productToAdd.finalUnitPrice || 0) * Number(selectedProductQty),
+                        type: 'finished',
+                        components: productToAdd.items || [],
+                        serials: []
+                    };
+                    setQuotationItems(prev => [...prev, newItem]);
+                    setSelectedProductId('');
+                    setSelectedProductQty(1);
+                }
             }
         }
     };
@@ -569,4 +578,3 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
 };
 
 export default QuotationManagement;
-
