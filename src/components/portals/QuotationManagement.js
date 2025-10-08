@@ -210,8 +210,8 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
         }
 
         if (productType === 'manual') {
-            if (!manualProductName || manualUnitPrice <= 0) {
-                alert("Please enter a valid product name and unit price for manual entry.");
+            if (!manualProductName || manualUnitPrice === '' || parseFloat(manualUnitPrice) < 0) {
+                alert("Please enter a valid product name and a non-negative unit price.");
                 return;
             }
             const newItem = {
