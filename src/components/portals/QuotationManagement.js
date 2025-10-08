@@ -578,4 +578,3 @@ const QuotationManagement = ({ currentUser, onNavigate }) => {
 };
 
 export default QuotationManagement;
-
